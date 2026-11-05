@@ -1,5 +1,5 @@
 {
-  "name": "tmp_app",
+  "name": "msreg-gala-camera",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,13 +9,18 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
+    "jszip": "^3.10.2",
     "next": "16.4.5",
+    "qrcode": "^1.5.4",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",

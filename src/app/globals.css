@@ -1,26 +1,95 @@
 @import "tailwindcss";
 
+@theme {
+  --color-paper: #F4EEE1;
+  --color-paper-light: #FAF7F0;
+  --color-paper-dark: #EAE2D2;
+  --color-ink: #1E1C1A;
+  --color-ink-muted: #5E5A54;
+  --color-ink-subtle: #8A847C;
+  --color-oxblood: #6B2A2A;
+  --color-oxblood-dark: #4A1A1A;
+  --color-line: rgba(30, 28, 26, 0.2);
+  --color-line-strong: rgba(30, 28, 26, 0.45);
+
+  --font-serif: var(--font-cormorant), Cormorant Garamond, Garamond, Georgia, serif;
+  --font-mono: var(--font-courier), Courier Prime, "Courier New", monospace;
+  --font-hand: var(--font-handwriting), "Homemade Apple", cursive;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #F4EEE1;
+  --foreground: #1E1C1A;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html, body {
+  background-color: #F4EEE1;
+  color: #1E1C1A;
+  font-family: var(--font-serif);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* Crisp letterpress borders */
+.border-vintage {
+  border-color: rgba(30, 28, 26, 0.22);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.border-vintage-strong {
+  border-color: rgba(30, 28, 26, 0.45);
+}
+
+/* Fine engraved line divider */
+.letterpress-rule {
+  border: 0;
+  height: 1px;
+  background-color: rgba(30, 28, 26, 0.22);
+  width: 100%;
+}
+
+.letterpress-double-rule {
+  border-top: 1px solid rgba(30, 28, 26, 0.35);
+  border-bottom: 1px solid rgba(30, 28, 26, 0.35);
+  height: 4px;
+}
+
+/* Polaroid frame styling */
+.polaroid-frame {
+  background-color: #FAF7F0;
+  border: 1px solid rgba(30, 28, 26, 0.2);
+  padding: 12px 12px 34px 12px;
+  box-shadow: none; /* strictly no drop shadows per design direction */
+}
+
+/* Small caps typewriter label */
+.program-label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem; /* 11px */
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #5E5A54;
+}
+
+/* Form inputs: strictly crisp, unrounded, vintage registry feel */
+input[type="text"],
+input[type="email"] {
+  border: 1px solid rgba(30, 28, 26, 0.3);
+  border-radius: 0;
+  background-color: transparent;
+  color: #1E1C1A;
+  font-family: var(--font-serif);
+  outline: none;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+input[type="text"]:focus,
+input[type="email"]:focus {
+  border-color: #6B2A2A;
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+input::placeholder {
+  color: #8A847C;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  letter-spacing: 0.05em;
+  font-style: italic;
 }
