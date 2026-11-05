@@ -1,11 +1,13 @@
 /**
  * Compresses an image element, video snapshot, or File to a maximum of 1600px on the long edge,
  * encoded as JPEG at approximately 0.8 quality.
+ * By default, squareCrop is true to match the classic 1:1 square Polaroid frame.
  */
 export async function compressImageToBlob(
   source: HTMLVideoElement | HTMLImageElement | File | Blob,
   maxDimension: number = 1600,
-  quality: number = 0.8
+  quality: number = 0.8,
+  squareCrop: boolean = true
 ): Promise<{ blob: Blob; dataUrl: string; width: number; height: number }> {
   let sourceWidth = 0;
   let sourceHeight = 0;
@@ -38,11 +40,27 @@ export async function compressImageToBlob(
     throw new Error("Invalid image source dimensions");
   }
 
-  // Calculate scaled dimensions preserving aspect ratio
-  let targetWidth = sourceWidth;
-  let targetHeight = sourceHeight;
+  let cropX = 0;
+  let cropY = 0;
+  let cropWidth = sourceWidth;
+  let cropHeight = sourceHeight;
 
-  if (sourceWidth > maxDimension || sourceHeight > maxDimension) {
+  if (squareCrop) {
+    const minDim = Math.min(sourceWidth, sourceHeight);
+    cropX = Math.round((sourceWidth - minDim) / 2);
+    cropY = Math.round((sourceHeight - minDim) / 2);
+    cropWidth = minDim;
+    cropHeight = minDim;
+  }
+
+  let targetWidth = cropWidth;
+  let targetHeight = cropHeight;
+
+  if (squareCrop) {
+    const size = Math.min(maxDimension, cropWidth);
+    targetWidth = size;
+    targetHeight = size;
+  } else if (sourceWidth > maxDimension || sourceHeight > maxDimension) {
     if (sourceWidth >= sourceHeight) {
       targetWidth = maxDimension;
       targetHeight = Math.round((sourceHeight * maxDimension) / sourceWidth);
@@ -61,8 +79,18 @@ export async function compressImageToBlob(
     throw new Error("Unable to create canvas rendering context");
   }
 
-  // Draw image to canvas
-  ctx.drawImage(drawable, 0, 0, targetWidth, targetHeight);
+  // Draw square cropped image to canvas
+  ctx.drawImage(
+    drawable,
+    cropX,
+    cropY,
+    cropWidth,
+    cropHeight,
+    0,
+    0,
+    targetWidth,
+    targetHeight
+  );
 
   // Convert to high efficiency JPEG
   const dataUrl = canvas.toDataURL("image/jpeg", quality);

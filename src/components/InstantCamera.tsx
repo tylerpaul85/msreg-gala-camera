@@ -263,14 +263,40 @@ export default function InstantCamera({
   const handleShutterPress = async () => {
     if (uploadState !== "idle" || isDeveloping || guest.shots_remaining <= 0) return;
 
-    // Flash pop if flash is active or auto
-    if (flashState === "ready" || flashState === "charging") {
+    const shouldFlash = flashState === "ready" || flashState === "charging";
+
+    // Trigger instant strobe flash if flash was selected
+    if (shouldFlash) {
       setIsFlashing(true);
-      setTimeout(() => setIsFlashing(false), 240);
-      setFlashState("off"); // Discharged
-    } else {
-      setIsFlashing(true);
-      setTimeout(() => setIsFlashing(false), 140);
+      setTimeout(() => setIsFlashing(false), 450);
+
+      // Attempt device torch if supported on mobile Safari/Chrome
+      if (streamRef.current) {
+        try {
+          const track = streamRef.current.getVideoTracks()[0];
+          const capabilities: any = track?.getCapabilities?.();
+          if (capabilities && capabilities.torch) {
+            await (track as any).applyConstraints({
+              advanced: [{ torch: true }],
+            });
+            setTimeout(async () => {
+              try {
+                await (track as any).applyConstraints({
+                  advanced: [{ torch: false }],
+                });
+              } catch {}
+            }, 300);
+          }
+        } catch (torchErr) {
+          console.log("Torch constraint not supported or restricted", torchErr);
+        }
+      }
+
+      setFlashState("off"); // Discharged after pop
+      if (stopWhineRef.current) {
+        stopWhineRef.current();
+        stopWhineRef.current = null;
+      }
     }
 
     // Play authentic Polaroid solenoid click + gear motor whirr
@@ -287,7 +313,8 @@ export default function InstantCamera({
         const { blob, dataUrl } = await compressImageToBlob(
           videoRef.current,
           1600,
-          0.8
+          0.8,
+          true // Square 1:1 Polaroid crop matching viewfinder
         );
         stopStream();
         initiateDeveloping(dataUrl, blob);
@@ -547,7 +574,7 @@ export default function InstantCamera({
     uploadState === "success";
 
   return (
-    <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-3 sm:px-6 sm:py-6 max-w-md mx-auto overflow-hidden safe-padding-top safe-padding-bottom">
+    <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-3 sm:px-6 sm:py-6 max-w-md mx-auto overflow-y-auto safe-padding-top safe-padding-bottom">
       {/* Hidden file input for native camera fallback */}
       <input
         ref={fileInputRef}
@@ -559,11 +586,9 @@ export default function InstantCamera({
       />
 
       {/* Shutter Fullscreen Strobe Flash Overlay */}
-      <div
-        className={`fixed inset-0 z-50 bg-[#FFFFFF] pointer-events-none transition-opacity duration-200 ${
-          isFlashing ? "opacity-100" : "opacity-0"
-        }`}
-      />
+      {isFlashing && (
+        <div className="fixed inset-0 z-[99999] pointer-events-none animate-strobe" />
+      )}
 
       {/* Top Header Bar */}
       <div className="w-full flex items-center justify-between pb-2.5 border-b border-[#1E1C1A]/20 text-xs font-mono tracking-widest text-[#5E5A54]">
@@ -611,6 +636,15 @@ export default function InstantCamera({
           <div className="bg-[#1C1A18] text-[#F4EEE1] border border-[#1E1C1A] px-3 py-2 mb-3 flex items-center justify-between shadow-inner">
             {/* Flash Strobe Window & Status */}
             <div className="flex items-center space-x-2.5">
+              {/* Physical Xenon Flash Reflector Bulb */}
+              <div className="relative w-12 h-7 bg-[#252321] border border-[#FAF7F0]/40 rounded-xs overflow-hidden flex items-center justify-center shrink-0">
+                <div className="w-full h-full bg-[radial-gradient(#5a5652_1px,transparent_1px)] [background-size:3px_3px] opacity-75" />
+                <div className="absolute w-7 h-1.5 rounded-full bg-[#FAF7F0]/85 shadow-[0_0_8px_rgba(255,255,255,0.7)]" />
+                {isFlashing && (
+                  <div className="absolute inset-0 bg-white shadow-[0_0_50px_20px_rgba(255,255,255,1)] z-30 animate-ping" />
+                )}
+              </div>
+
               <button
                 type="button"
                 onClick={handleToggleFlash}
@@ -634,7 +668,7 @@ export default function InstantCamera({
               </button>
 
               {/* Capacitor Neon Ready LED */}
-              <div className="flex items-center space-x-1">
+              <div className="hidden sm:flex items-center space-x-1">
                 <span
                   className={`w-2 h-2 rounded-full border border-[#1E1C1A] ${
                     flashState === "ready"
@@ -680,10 +714,10 @@ export default function InstantCamera({
               </button>
             </div>
 
-            {/* Large Stepped Circular Lens Barrel housing the Viewfinder */}
-            <div className="relative mx-auto aspect-square w-full max-w-[270px] sm:max-w-[300px] lens-barrel-outer p-2 flex items-center justify-center overflow-hidden z-20">
-              {/* Live Viewfinder Feed inside the circular/rounded aperture */}
-              <div className="relative w-full h-full rounded-full overflow-hidden bg-[#0A0908] border border-[#FAF7F0]/20 flex items-center justify-center">
+            {/* Square Optical Viewfinder matching Polaroid Aspect Ratio */}
+            <div className="relative mx-auto aspect-square w-full max-w-[270px] sm:max-w-[300px] viewfinder-square-housing p-2 flex items-center justify-center overflow-hidden z-20 border-2 border-[#1E1C1A]">
+              {/* Live Viewfinder Feed inside square frame */}
+              <div className="relative w-full h-full overflow-hidden bg-[#0A0908] border border-[#FAF7F0]/20 flex items-center justify-center">
                 <video
                   ref={videoRef}
                   playsInline
@@ -694,18 +728,39 @@ export default function InstantCamera({
                   }`}
                 />
 
-                {/* Rangefinder Optical Split Ring */}
+                {/* Rangefinder Optical Center and Square Framing Reticles */}
                 {isCameraActive && !capturedDataUrl && (
-                  <div className="rangefinder-split z-10 flex items-center justify-center">
-                    <div className="w-1.5 h-1.5 rounded-full bg-[#FAF7F0]/60" />
+                  <>
+                    <div className="viewfinder-reticle-tl" />
+                    <div className="viewfinder-reticle-tr" />
+                    <div className="viewfinder-reticle-bl" />
+                    <div className="viewfinder-reticle-br" />
+                    <div className="rangefinder-split z-10 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#FAF7F0]/70" />
+                    </div>
+                  </>
+                )}
+
+                {/* Standby notice inside square viewfinder when film is ejected */}
+                {capturedDataUrl && (
+                  <div className="absolute inset-0 bg-[#0E0D0C]/90 flex flex-col items-center justify-center p-4 text-center space-y-2 z-10">
+                    <div className="w-8 h-8 rounded-full border border-[#B89758]/50 flex items-center justify-center">
+                      <span className="text-[#B89758] text-xs">▼</span>
+                    </div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#FAF7F0]">
+                      Plate Ejected
+                    </p>
+                    <p className="font-serif italic text-xs text-[#FAF7F0]/70 max-w-[180px]">
+                      Review photograph in delivery tray below
+                    </p>
                   </div>
                 )}
 
                 {/* Fallback View if camera permission denied */}
                 {!isCameraActive && !capturedDataUrl && (
                   <div className="p-4 text-center space-y-3 z-10 max-w-[220px]">
-                    <div className="w-12 h-12 rounded-full border border-[#FAF7F0]/20 mx-auto flex items-center justify-center">
-                      <div className="w-6 h-6 rounded-full border border-[#6B2A2A]" />
+                    <div className="w-12 h-12 border border-[#FAF7F0]/20 mx-auto flex items-center justify-center">
+                      <div className="w-6 h-6 border border-[#6B2A2A]" />
                     </div>
                     <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#FAF7F0]/70 leading-tight">
                       {cameraError || "Optical lens ready..."}
@@ -720,79 +775,6 @@ export default function InstantCamera({
                   </div>
                 )}
               </div>
-
-              {/* Chemical Developing Preview on Captured Polaroid */}
-              {capturedDataUrl && (
-                <div className="absolute inset-0 bg-[#0C0B0A]/95 rounded-full flex items-center justify-center p-2 z-40 animate-[fadeIn_0.3s_ease-out]">
-                  <div
-                    onPointerMove={handleEmulsionRub}
-                    onClick={handleEmulsionRub}
-                    className="polaroid-frame w-full max-w-[210px] border border-[#1E1C1A]/40 transition-transform duration-500 ease-out select-none cursor-pointer"
-                    title="Rub emulsion to accelerate development"
-                  >
-                    <div className="aspect-square relative overflow-hidden bg-[#181615] border border-[#1E1C1A]/30">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={capturedDataUrl}
-                        alt="Captured instant exposure"
-                        className="w-full h-full object-cover transition-all duration-300"
-                        style={{
-                          filter: isDeveloping
-                            ? `brightness(${0.22 + (developmentProgress / 100) * 0.78}) contrast(${
-                                1.6 - (developmentProgress / 100) * 0.6
-                              }) saturate(${
-                                0.15 + (developmentProgress / 100) * 0.85
-                              }) blur(${
-                                (1 - developmentProgress / 100) * 2.2
-                              }px)`
-                            : "none",
-                        }}
-                      />
-
-                      {/* Milky Opacifier Layer */}
-                      {isDeveloping && (
-                        <div
-                          className="absolute inset-0 pointer-events-none transition-opacity duration-300 mix-blend-screen"
-                          style={{
-                            backgroundColor: "#3A4A48",
-                            opacity: (1 - developmentProgress / 100) * 0.75,
-                          }}
-                        />
-                      )}
-
-                      {/* Progress Prompt */}
-                      {isDeveloping && (
-                        <div className="absolute inset-x-0 bottom-0 bg-[#0E0D0C]/90 px-1.5 py-1 flex items-center justify-between text-[8px] font-mono uppercase tracking-widest text-[#FAF7F0]">
-                          <span>{hasInteractedWithEmulsion ? "Warming..." : "Rub to clear"}</span>
-                          <span className="font-bold text-[#B89758]">{developmentProgress}%</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Handwritten Caption Chin */}
-                    <div className="pt-2 pb-0.5">
-                      <input
-                        type="text"
-                        maxLength={50}
-                        placeholder="A handwritten note..."
-                        value={caption}
-                        onChange={(e) => setCaption(e.target.value)}
-                        disabled={isBusy}
-                        className="w-full text-center font-hand text-sm text-[#1E1C1A] placeholder:text-[#8A847C]/60 border-b border-[#1E1C1A]/20 bg-transparent py-0.5 focus:border-[#6B2A2A] outline-none"
-                      />
-
-                      {uploadState !== "idle" && (
-                        <div className="pt-1 text-center font-mono text-[8px] uppercase tracking-wider text-[#6B2A2A]">
-                          {uploadState === "saving" && "Saving plate..."}
-                          {uploadState === "retrying" && `Retrying (${uploadAttempt}/4)...`}
-                          {uploadState === "success" && "✓ Sealed in vault"}
-                          {uploadState === "failed" && "! Signal pending"}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* Front Controls Deck: Lighten/Darken Dial & The Iconic Shutter Button */}
@@ -832,44 +814,119 @@ export default function InstantCamera({
                   </button>
                 </div>
               ) : (
-                /* Review Controls */
-                <div className="flex space-x-2">
-                  <button
-                    type="button"
-                    onClick={handleRetake}
-                    disabled={isBusy}
-                    className="py-1.5 px-3 bg-transparent hover:bg-[#FAF7F0]/10 text-[#FAF7F0]/80 border border-[#FAF7F0]/30 font-mono text-[9px] uppercase tracking-wider cursor-pointer"
-                  >
-                    Retake
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleConfirmPhoto}
-                    disabled={isBusy}
-                    className="py-1.5 px-4 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] font-mono text-[9px] uppercase tracking-wider font-bold cursor-pointer"
-                  >
-                    Confirm ({guest.shots_remaining})
-                  </button>
+                <div className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#FAF7F0]/60">
+                  FILM IN TRAY ▼
                 </div>
               )}
             </div>
           </div>
 
           {/* Bottom Ejection Mouth / Film Roller Door (Classic Polaroid Ejection Slot) */}
-          <div className="mt-2 pt-2 border-t-2 border-[#1E1C1A] flex flex-col items-center">
+          <div className="mt-2.5 pt-2 border-t-2 border-[#1E1C1A] flex flex-col items-center">
             {/* The Black Film Slot with the Roller Lip */}
-            <div className="w-56 h-2 bg-[#121110] border border-[#1E1C1A] rounded-sm relative overflow-hidden flex items-center justify-center">
-              <div className="w-40 h-[1px] bg-[#FAF7F0]/20" />
+            <div className="w-60 sm:w-68 h-3 bg-[#0E0D0C] border-2 border-[#1E1C1A] rounded-xs relative overflow-hidden flex items-center justify-center shadow-inner">
+              <div className="w-48 h-[2px] bg-[#FAF7F0]/30 shadow-[0_0_4px_rgba(255,255,255,0.3)]" />
             </div>
             <span className="font-mono text-[8px] uppercase tracking-[0.25em] text-[#5E5A54] mt-1">
               ▼ FILM DELIVERY SLOT • 800 SPEED ▼
             </span>
           </div>
         </div>
+
+        {/* ── THE PHYSICALLY EJECTED POLAROID SLIDING OUT OF THE SLOT ── */}
+        {capturedDataUrl && (
+          <div className="w-full mt-3 flex flex-col items-center animate-eject-polaroid z-30">
+            <div
+              onPointerMove={handleEmulsionRub}
+              onClick={handleEmulsionRub}
+              className="polaroid-frame w-full max-w-[260px] sm:max-w-[280px] border border-[#1E1C1A]/40 transition-transform select-none cursor-pointer"
+              title="Rub emulsion to accelerate development"
+            >
+              <div className="aspect-square relative overflow-hidden bg-[#181615] border border-[#1E1C1A]/30">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={capturedDataUrl}
+                  alt="Captured instant exposure"
+                  className="w-full h-full object-cover transition-all duration-300"
+                  style={{
+                    filter: isDeveloping
+                      ? `brightness(${0.22 + (developmentProgress / 100) * 0.78}) contrast(${
+                          1.6 - (developmentProgress / 100) * 0.6
+                        }) saturate(${
+                          0.15 + (developmentProgress / 100) * 0.85
+                        }) blur(${(1 - developmentProgress / 100) * 2.2}px)`
+                      : "none",
+                  }}
+                />
+
+                {/* Milky Opacifier Layer */}
+                {isDeveloping && (
+                  <div
+                    className="absolute inset-0 pointer-events-none transition-opacity duration-300 mix-blend-screen"
+                    style={{
+                      backgroundColor: "#3A4A48",
+                      opacity: (1 - developmentProgress / 100) * 0.75,
+                    }}
+                  />
+                )}
+
+                {/* Progress Prompt */}
+                {isDeveloping && (
+                  <div className="absolute inset-x-0 bottom-0 bg-[#0E0D0C]/90 px-1.5 py-1 flex items-center justify-between text-[8px] font-mono uppercase tracking-widest text-[#FAF7F0]">
+                    <span>{hasInteractedWithEmulsion ? "Warming..." : "Rub to clear"}</span>
+                    <span className="font-bold text-[#B89758]">{developmentProgress}%</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Handwritten Caption Chin */}
+              <div className="pt-2 pb-0.5">
+                <input
+                  type="text"
+                  maxLength={50}
+                  placeholder="Add a handwritten note..."
+                  value={caption}
+                  onChange={(e) => setCaption(e.target.value)}
+                  disabled={isBusy}
+                  className="w-full text-center font-hand text-sm text-[#1E1C1A] placeholder:text-[#8A847C]/60 border-b border-[#1E1C1A]/20 bg-transparent py-0.5 focus:border-[#6B2A2A] outline-none"
+                />
+
+                {uploadState !== "idle" && (
+                  <div className="pt-1 text-center font-mono text-[8px] uppercase tracking-wider text-[#6B2A2A]">
+                    {uploadState === "saving" && "Sealing plate in darkroom..."}
+                    {uploadState === "retrying" && `Retrying (${uploadAttempt}/4)...`}
+                    {uploadState === "success" && "✓ Sealed in vault"}
+                    {uploadState === "failed" && "! Signal pending"}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Review Controls Deck */}
+            <div className="flex items-center space-x-2.5 mt-2.5 w-full max-w-[260px] sm:max-w-[280px]">
+              <button
+                type="button"
+                onClick={handleRetake}
+                disabled={isBusy}
+                className="flex-1 py-2 px-3 bg-transparent hover:bg-[#1E1C1A]/10 text-[#1E1C1A] border border-[#1E1C1A]/40 font-mono text-[9px] uppercase tracking-wider cursor-pointer transition-colors text-center"
+              >
+                Retake
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPhoto}
+                disabled={isBusy}
+                className="flex-1 py-2 px-3 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#1E1C1A] font-mono text-[9px] uppercase tracking-wider font-bold cursor-pointer transition-colors text-center"
+              >
+                Keep ({guest.shots_remaining})
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Camera Base Footer / Colophon */}
-      <footer className="w-full text-center pt-2 border-t border-[#1E1C1A]/15">
+      <footer className="w-full text-center pt-2 border-t border-[#1E1C1A]/15 mt-3">
         <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#5E5A54]">
           MSREG Client Gala • Photos Release at 8:00 PM CST
         </p>
