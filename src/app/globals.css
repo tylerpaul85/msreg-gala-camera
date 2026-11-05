@@ -283,6 +283,52 @@ input::placeholder {
   animation: ejectSlideDown 0.85s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Realistic Motorized Film Roller Ejection from Slot */
+@keyframes filmRollerEject {
+  0% {
+    transform: translateY(-92%);
+    opacity: 0.8;
+  }
+  25% {
+    transform: translateY(-68%);
+    opacity: 1;
+  }
+  65% {
+    transform: translateY(-22%);
+  }
+  85% {
+    transform: translateY(-4%);
+  }
+  100% {
+    transform: translateY(0%);
+    opacity: 1;
+  }
+}
+
+.animate-film-roller-eject {
+  animation: filmRollerEject 1.45s cubic-bezier(0.2, 0.9, 0.3, 1) forwards;
+}
+
+/* Vaulting sealed animation */
+@keyframes sealIntoVault {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  30% {
+    transform: translateY(-10px) scale(1.02);
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateY(-90px) scale(0.85);
+    opacity: 0;
+  }
+}
+
+.animate-seal-vault {
+  animation: sealIntoVault 0.55s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
 /* Exposure Compensation Wheel (Lighten/Darken half-moon wheel) */
 .exposure-wheel {
   background: linear-gradient(to right, #FAF7F0 50%, #151413 50%);
