@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import InstantCamera from "@/components/InstantCamera";
+import { playWindingSound } from "@/lib/audio";
 
 interface Guest {
   id: string;
@@ -84,7 +85,7 @@ export default function Home() {
     }
 
     if (!firstName.trim() || !lastName.trim()) {
-      setFormError("Kindly provide both your first name and surname for the gala roll ledger.");
+      setFormError("Kindly provide both your given name and surname for the gala roll ledger.");
       return;
     }
 
@@ -103,12 +104,15 @@ export default function Home() {
         throw new Error(data.error || "The registrar desk could not validate your cartridge.");
       }
 
+      // Play mechanical film winding sound
+      playWindingSound(false);
+
       if (!data.isNew) {
         setStatusNotice(
           `Welcome back, ${data.guest.name}. Existing film roll restored (${data.guest.shots_remaining} exposures remaining).`
         );
       } else {
-        setStatusNotice(`Film cartridge issued to ${data.guest.name}. 8 exposures loaded.`);
+        setStatusNotice(`Film cartridge loaded: 8 exposures initialized for ${data.guest.name}.`);
       }
 
       if (data.guest?.session_token && typeof window !== "undefined") {
@@ -118,11 +122,12 @@ export default function Home() {
         );
       }
 
-      // Transition into the instant camera view
-      setGuest(data.guest);
+      // Brief mechanical transition delay so the guest hears the ratchet
+      setTimeout(() => {
+        setGuest(data.guest);
+      }, 550);
     } catch (err: any) {
       setFormError(err.message || "An unexpected ledger error occurred. Please try again.");
-    } finally {
       setIsSubmitting(false);
     }
   };
@@ -146,7 +151,7 @@ export default function Home() {
 
   // Otherwise, render vintage letterpress landing page
   return (
-    <main className="relative min-h-screen flex flex-col justify-between px-4 py-8 sm:px-8 sm:py-12 md:py-16 max-w-2xl mx-auto">
+    <main className="relative min-h-screen flex flex-col justify-between px-4 py-8 sm:px-8 sm:py-12 md:py-16 max-w-2xl mx-auto safe-padding-top safe-padding-bottom">
       {/* Outer printed program border frame */}
       <div className="absolute inset-3 sm:inset-5 pointer-events-none border border-[#1E1C1A]/15" />
       <div className="absolute inset-4 sm:inset-6 pointer-events-none border border-[#1E1C1A]/30" />
@@ -167,7 +172,7 @@ export default function Home() {
             MSREG Gala Camera
           </h1>
           <p className="font-serif italic text-lg sm:text-xl text-[#6B2A2A] pt-1">
-            November 14, 2026
+            Saturday, November 14, 2026
           </p>
         </div>
 
@@ -216,12 +221,20 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Guest Registration Form */}
-        <div className="border border-[#1E1C1A]/20 p-5 sm:p-7 bg-[#F4EEE1]/60">
+        {/* Guest Registration Form with Perforated Ticket Edge */}
+        <div className="relative border border-[#1E1C1A]/25 bg-[#F4EEE1]/80 p-5 sm:p-7">
+          {/* Perforated Admit Ticket Header */}
+          <div className="ticket-perforation -mt-5 -mx-5 sm:-mx-7 mb-4 opacity-40" />
+
           <div className="flex items-center justify-between pb-3 mb-5 border-b border-[#1E1C1A]/15">
-            <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-[#1E1C1A] font-bold">
-              Guest Registry & Cartridge Issue
-            </h2>
+            <div>
+              <span className="block font-mono text-[8px] uppercase tracking-[0.25em] text-[#6B2A2A]">
+                ADMIT ONE • CARTRIDGE ISSUE
+              </span>
+              <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-[#1E1C1A] font-bold mt-0.5">
+                Guest Registry Ledger
+              </h2>
+            </div>
             <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#6B2A2A]">
               Step 01 of 02
             </span>
@@ -234,7 +247,7 @@ export default function Home() {
                   htmlFor="firstName"
                   className="block font-mono text-[10px] uppercase tracking-[0.18em] text-[#5E5A54]"
                 >
-                  First Name <span className="text-[#6B2A2A]">*</span>
+                  Given Name <span className="text-[#6B2A2A]">*</span>
                 </label>
                 <input
                   id="firstName"
@@ -252,7 +265,7 @@ export default function Home() {
                   htmlFor="lastName"
                   className="block font-mono text-[10px] uppercase tracking-[0.18em] text-[#5E5A54]"
                 >
-                  Last Name <span className="text-[#6B2A2A]">*</span>
+                  Surname <span className="text-[#6B2A2A]">*</span>
                 </label>
                 <input
                   id="lastName"
@@ -293,7 +306,7 @@ export default function Home() {
               </span>
             </div>
 
-            {/* Vintage error presentation - no generic red boxes */}
+            {/* Vintage error presentation */}
             {formError && (
               <div className="p-3 bg-[#FAF7F0] border-l-2 border-[#6B2A2A] border-t border-r border-b border-[#1E1C1A]/20 text-[#6B2A2A] font-mono text-[11px] leading-relaxed">
                 <span className="font-bold uppercase tracking-wider block mb-0.5">
@@ -310,7 +323,7 @@ export default function Home() {
               </div>
             )}
 
-            {/* Load Film Button - Crisp, rectangular, ink charcoal with oxblood hover */}
+            {/* Load Film Button */}
             <div className="pt-3">
               <button
                 type="submit"
@@ -320,7 +333,7 @@ export default function Home() {
                 {isSubmitting ? (
                   <span className="flex items-center justify-center space-x-2">
                     <span className="inline-block w-2 h-2 bg-[#F4EEE1] animate-ping" />
-                    <span>Engaging Cartridge Mechanism...</span>
+                    <span>Winding Film Sprockets...</span>
                   </span>
                 ) : (
                   <span>Load Film &nbsp;[ 8 Exposures ]</span>
