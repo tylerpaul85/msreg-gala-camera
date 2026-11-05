@@ -93,3 +93,11 @@ input::placeholder {
   letter-spacing: 0.05em;
   font-style: italic;
 }
+
+/* Mobile device safe area support for iOS Safari home bar and notch */
+.safe-padding-top {
+  padding-top: max(0.75rem, env(safe-area-inset-top));
+}
+.safe-padding-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}

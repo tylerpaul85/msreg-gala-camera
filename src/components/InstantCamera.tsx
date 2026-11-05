@@ -489,7 +489,7 @@ export default function InstantCamera({
     uploadState === "success";
 
   return (
-    <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-4 sm:px-6 sm:py-6 max-w-md mx-auto overflow-hidden">
+    <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-4 sm:px-6 sm:py-6 max-w-md mx-auto overflow-hidden safe-padding-top safe-padding-bottom">
       {/* Hidden file input for native camera fallback */}
       <input
         ref={fileInputRef}
@@ -663,7 +663,7 @@ export default function InstantCamera({
                     <input
                       type="text"
                       maxLength={60}
-                      placeholder="Add handwritten note..."
+                      placeholder="A handwritten note for the vault..."
                       value={caption}
                       onChange={(e) => setCaption(e.target.value)}
                       disabled={isBusy}

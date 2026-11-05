@@ -247,7 +247,7 @@ export default function AdminPage() {
                 id="adminPass"
                 type="password"
                 required
-                placeholder="Enter admin password..."
+                placeholder="Administrative key..."
                 value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
                 className="w-full px-3 py-2.5 text-sm bg-transparent border border-[#1E1C1A]/30 focus:border-[#6B2A2A] outline-none font-mono"

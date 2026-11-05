@@ -240,7 +240,7 @@ export default function Home() {
                   id="firstName"
                   type="text"
                   required
-                  placeholder="e.g. Thomas"
+                  placeholder="Given Name"
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   className="w-full px-3 py-2.5 text-base sm:text-sm placeholder:text-[#8A847C]/70 focus:ring-0"
@@ -258,7 +258,7 @@ export default function Home() {
                   id="lastName"
                   type="text"
                   required
-                  placeholder="e.g. Sinclair"
+                  placeholder="Surname"
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   className="w-full px-3 py-2.5 text-base sm:text-sm placeholder:text-[#8A847C]/70 focus:ring-0"
@@ -277,7 +277,7 @@ export default function Home() {
                 id="email"
                 type="email"
                 required
-                placeholder="for your midnight gallery invitation"
+                placeholder="guest@domain.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full px-3 py-2.5 text-base sm:text-sm placeholder:text-[#8A847C]/70 focus:ring-0"
