@@ -27,11 +27,11 @@ const homemadeApple = Homemade_Apple({
 
 export const metadata: Metadata = {
   title: "MSREG Gala Camera — Client Appreciation Gala",
-  description: "Eight exposures. Develop at midnight. A 1970s disposable camera experience for the MSREG Client Appreciation Gala.",
+  description: "Eight exposures. Develop at 8:00 PM CST on November 14, 2026. A 1970s instant camera experience for the MSREG Client Appreciation Gala.",
   metadataBase: new URL("https://gala.mattsmithrealestategroup.com"),
   openGraph: {
     title: "MSREG Gala Camera — Client Appreciation Gala",
-    description: "Eight exposures. Develop at midnight. A 1970s instant camera experience for our esteemed guests.",
+    description: "Eight exposures. Develop at 8:00 PM CST on November 14, 2026. A 1970s instant camera experience for our esteemed guests.",
     siteName: "MSREG Gala Camera",
     locale: "en_US",
     type: "website",
@@ -39,7 +39,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "MSREG Gala Camera — Client Appreciation Gala",
-    description: "Eight exposures. Develop at midnight. A 1970s instant camera experience for our esteemed guests.",
+    description: "Eight exposures. Develop at 8:00 PM CST on November 14, 2026. A 1970s instant camera experience for our esteemed guests.",
   },
   appleWebApp: {
     capable: true,

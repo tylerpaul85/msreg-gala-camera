@@ -1,4 +1,4 @@
-// Synthesized authentic 1970s instant camera acoustics using Web Audio API
+// Synthesized authentic 1970s Polaroid Land / OneStep camera acoustics using Web Audio API
 
 let audioCtx: AudioContext | null = null;
 
@@ -31,8 +31,8 @@ export function playLeverClick(isMuted: boolean = false) {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "triangle";
-    osc.frequency.setValueAtTime(480, now);
-    osc.frequency.exponentialRampToValueAtTime(120, now + 0.025);
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(140, now + 0.025);
 
     gain.gain.setValueAtTime(0.2, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
@@ -56,17 +56,16 @@ export function playWindingSound(isMuted: boolean = false) {
     if (!ctx) return;
     const now = ctx.currentTime;
 
-    // Series of 6 micro-ratchet teeth
-    for (let i = 0; i < 6; i++) {
-      const toothTime = now + i * 0.06;
+    for (let i = 0; i < 7; i++) {
+      const toothTime = now + i * 0.055;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
 
       osc.type = "sawtooth";
-      osc.frequency.setValueAtTime(500 + i * 40, toothTime);
-      osc.frequency.exponentialRampToValueAtTime(100, toothTime + 0.02);
+      osc.frequency.setValueAtTime(440 + i * 45, toothTime);
+      osc.frequency.exponentialRampToValueAtTime(90, toothTime + 0.02);
 
-      gain.gain.setValueAtTime(0.15, toothTime);
+      gain.gain.setValueAtTime(0.18, toothTime);
       gain.gain.exponentialRampToValueAtTime(0.001, toothTime + 0.025);
 
       osc.connect(gain);
@@ -80,12 +79,83 @@ export function playWindingSound(isMuted: boolean = false) {
 }
 
 /**
- * Iconic 1970s instant camera shutter & electric roller ejection motor sound:
- * 1. Shutter trip snap (0ms - 40ms)
- * 2. Mirror slap thud (50ms - 90ms)
- * 3. Electric gear motor whirr as film ejects through chemical rollers (100ms - 750ms)
+ * Iconic Xenon Flash Inverter Charging Whine (1970s/80s electronic strobe)
+ * Rising high-pitch tone from ~1.2kHz to ~4.6kHz over 2 seconds
  */
-export function playShutterAndMotorSound(isMuted: boolean = false) {
+export function playFlashChargingWhine(isMuted: boolean = false): () => void {
+  if (isMuted) return () => {};
+
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return () => {};
+    const now = ctx.currentTime;
+    const duration = 2.1;
+
+    // High frequency charging oscillator
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    // Secondary oscillator for the converter harmonics/whine
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(1100, now);
+    osc.frequency.exponentialRampToValueAtTime(4500, now + duration);
+
+    osc2.type = "sawtooth";
+    osc2.frequency.setValueAtTime(2200, now);
+    osc2.frequency.exponentialRampToValueAtTime(9000, now + duration);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.linearRampToValueAtTime(0.08, now + 0.2);
+    gain.gain.setValueAtTime(0.08, now + duration - 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    gain2.gain.setValueAtTime(0.001, now);
+    gain2.gain.linearRampToValueAtTime(0.03, now + 0.3);
+    gain2.gain.setValueAtTime(0.03, now + duration - 0.1);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + duration);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+
+    osc.start(now);
+    osc2.start(now);
+    osc.stop(now + duration);
+    osc2.stop(now + duration);
+
+    // Return a stop function if user snaps early
+    return () => {
+      try {
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.05);
+        setTimeout(() => {
+          osc.stop();
+          osc2.stop();
+        }, 60);
+      } catch {}
+    };
+  } catch (err) {
+    console.warn("Flash audio bypass:", err);
+    return () => {};
+  }
+}
+
+/**
+ * Authentic Polaroid Camera Shutter & Electric Motor Drive Sound
+ * Real Polaroid (SX-70 / 600 / OneStep) sound breakdown:
+ * 1. Shutter trip: Fast mechanical solenoid "KA-CHIK" (0-60ms)
+ * 2. Instant electric motor spin-up (60-700ms):
+ *    - Gritty DC motor whine with gear train harmonics (240Hz-310Hz)
+ *    - Mechanical gear teeth friction noise (bandpassed noise)
+ *    - Chemical pod breaking "squish-roll" transient at 180ms
+ * 3. Final mechanical roller latch release "CLACK-TINK" at 720ms
+ */
+export function playPolaroidShutterSound(isMuted: boolean = false) {
   if (isMuted) return;
 
   try {
@@ -93,92 +163,152 @@ export function playShutterAndMotorSound(isMuted: boolean = false) {
     if (!ctx) return;
     const now = ctx.currentTime;
 
-    // 1. Shutter Trip Snap (Sine + Noise burst)
-    const osc1 = ctx.createOscillator();
-    const gain1 = ctx.createGain();
-    osc1.type = "sine";
-    osc1.frequency.setValueAtTime(360, now);
-    osc1.frequency.exponentialRampToValueAtTime(80, now + 0.04);
-    gain1.gain.setValueAtTime(0.45, now);
-    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
-    osc1.connect(gain1);
-    gain1.connect(ctx.destination);
-    osc1.start(now);
-    osc1.stop(now + 0.05);
+    // ── 1. Solenoid Shutter Snap: "KA-CHIK" (0ms - 55ms) ──
+    // Click 1 (Blade open)
+    const click1 = ctx.createOscillator();
+    const clickGain1 = ctx.createGain();
+    click1.type = "sine";
+    click1.frequency.setValueAtTime(800, now);
+    click1.frequency.exponentialRampToValueAtTime(120, now + 0.03);
+    clickGain1.gain.setValueAtTime(0.5, now);
+    clickGain1.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+    click1.connect(clickGain1);
+    clickGain1.connect(ctx.destination);
+    click1.start(now);
+    click1.stop(now + 0.04);
 
-    // Friction burst
-    const bufferSize = ctx.sampleRate * 0.05;
-    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    // Click 2 (Blade close - 22ms later)
+    const click2 = ctx.createOscillator();
+    const clickGain2 = ctx.createGain();
+    click2.type = "triangle";
+    click2.frequency.setValueAtTime(620, now + 0.022);
+    click2.frequency.exponentialRampToValueAtTime(100, now + 0.055);
+    clickGain2.gain.setValueAtTime(0.45, now + 0.022);
+    clickGain2.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
+    click2.connect(clickGain2);
+    clickGain2.connect(ctx.destination);
+    click2.start(now + 0.022);
+    click2.stop(now + 0.06);
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
-    const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 2200;
-    filter.Q.value = 3.0;
-    const noiseGain = ctx.createGain();
-    noiseGain.gain.setValueAtTime(0.35, now);
-    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+    // Metallic shutter strike noise
+    const snapBufSize = ctx.sampleRate * 0.05;
+    const snapBuf = ctx.createBuffer(1, snapBufSize, ctx.sampleRate);
+    const snapData = snapBuf.getChannelData(0);
+    for (let i = 0; i < snapBufSize; i++) snapData[i] = Math.random() * 2 - 1;
+    const snapNoise = ctx.createBufferSource();
+    snapNoise.buffer = snapBuf;
+    const snapFilter = ctx.createBiquadFilter();
+    snapFilter.type = "bandpass";
+    snapFilter.frequency.value = 3200;
+    snapFilter.Q.value = 4.0;
+    const snapNoiseGain = ctx.createGain();
+    snapNoiseGain.gain.setValueAtTime(0.4, now);
+    snapNoiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+    snapNoise.connect(snapFilter);
+    snapFilter.connect(snapNoiseGain);
+    snapNoiseGain.connect(ctx.destination);
+    snapNoise.start(now);
+    snapNoise.stop(now + 0.05);
 
-    noise.connect(filter);
-    filter.connect(noiseGain);
-    noiseGain.connect(ctx.destination);
-    noise.start(now);
-    noise.stop(now + 0.055);
+    // ── 2. The Iconic Electric Gear Motor & Rollers: "KZZZZZZH-WHURRRRR" (65ms - 720ms) ──
+    const motorStart = now + 0.065;
+    const motorDuration = 0.68; // ~680ms motor run
 
-    // 2. Mirror Slap Thud (at 60ms)
-    const osc2 = ctx.createOscillator();
-    const gain2 = ctx.createGain();
-    osc2.type = "triangle";
-    osc2.frequency.setValueAtTime(160, now + 0.06);
-    osc2.frequency.exponentialRampToValueAtTime(45, now + 0.12);
-    gain2.gain.setValueAtTime(0.4, now + 0.06);
-    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
-    osc2.connect(gain2);
-    gain2.connect(ctx.destination);
-    osc2.start(now + 0.06);
-    osc2.stop(now + 0.14);
-
-    // 3. Electric Roller Ejection Motor (120ms to 750ms)
-    // Complex tone simulating tiny DC motor gearing + spreading rollers
-    const motorTime = now + 0.12;
-    const motorDuration = 0.65; // ~650ms ejection motor cycle
-
-    const motorOsc1 = ctx.createOscillator();
-    const motorOsc2 = ctx.createOscillator();
+    // Motor fundamental tone
+    const motor1 = ctx.createOscillator();
+    const motor2 = ctx.createOscillator();
     const motorGain = ctx.createGain();
 
-    motorOsc1.type = "sawtooth";
-    motorOsc1.frequency.setValueAtTime(140, motorTime);
-    motorOsc1.frequency.linearRampToValueAtTime(165, motorTime + motorDuration * 0.4);
-    motorOsc1.frequency.linearRampToValueAtTime(130, motorTime + motorDuration);
+    motor1.type = "sawtooth";
+    motor1.frequency.setValueAtTime(260, motorStart);
+    // Slight motor pitch sag as rollers engage the stiff film card
+    motor1.frequency.linearRampToValueAtTime(245, motorStart + 0.15);
+    motor1.frequency.linearRampToValueAtTime(280, motorStart + motorDuration * 0.7);
+    motor1.frequency.linearRampToValueAtTime(250, motorStart + motorDuration);
 
-    motorOsc2.type = "square";
-    motorOsc2.frequency.setValueAtTime(280, motorTime);
-    motorOsc2.frequency.linearRampToValueAtTime(330, motorTime + motorDuration * 0.4);
-    motorOsc2.frequency.linearRampToValueAtTime(260, motorTime + motorDuration);
+    motor2.type = "square";
+    motor2.frequency.setValueAtTime(520, motorStart);
+    motor2.frequency.linearRampToValueAtTime(490, motorStart + 0.15);
+    motor2.frequency.linearRampToValueAtTime(560, motorStart + motorDuration * 0.7);
+    motor2.frequency.linearRampToValueAtTime(500, motorStart + motorDuration);
 
+    // Filter to give that authentic plastic/metal gearbox resonance
     const motorFilter = ctx.createBiquadFilter();
-    motorFilter.type = "lowpass";
-    motorFilter.frequency.setValueAtTime(800, motorTime);
-    motorFilter.frequency.exponentialRampToValueAtTime(400, motorTime + motorDuration);
+    motorFilter.type = "bandpass";
+    motorFilter.frequency.setValueAtTime(1100, motorStart);
+    motorFilter.Q.value = 2.5;
 
-    motorGain.gain.setValueAtTime(0.001, motorTime);
-    motorGain.gain.linearRampToValueAtTime(0.25, motorTime + 0.05);
-    motorGain.gain.setValueAtTime(0.22, motorTime + motorDuration - 0.08);
-    motorGain.gain.exponentialRampToValueAtTime(0.001, motorTime + motorDuration);
+    motorGain.gain.setValueAtTime(0.001, motorStart);
+    motorGain.gain.linearRampToValueAtTime(0.35, motorStart + 0.04);
+    motorGain.gain.setValueAtTime(0.32, motorStart + motorDuration - 0.08);
+    motorGain.gain.exponentialRampToValueAtTime(0.001, motorStart + motorDuration);
 
-    motorOsc1.connect(motorFilter);
-    motorOsc2.connect(motorFilter);
+    motor1.connect(motorFilter);
+    motor2.connect(motorFilter);
     motorFilter.connect(motorGain);
     motorGain.connect(ctx.destination);
 
-    motorOsc1.start(motorTime);
-    motorOsc2.start(motorTime);
-    motorOsc1.stop(motorTime + motorDuration);
-    motorOsc2.stop(motorTime + motorDuration);
+    motor1.start(motorStart);
+    motor2.start(motorStart);
+    motor1.stop(motorStart + motorDuration);
+    motor2.stop(motorStart + motorDuration);
+
+    // Gritty gear-teeth friction noise (continuous roller mechanical texture)
+    const gearBufSize = ctx.sampleRate * motorDuration;
+    const gearBuf = ctx.createBuffer(1, gearBufSize, ctx.sampleRate);
+    const gearData = gearBuf.getChannelData(0);
+    for (let i = 0; i < gearBufSize; i++) {
+      // Modulate noise to mimic spinning gear teeth
+      const mod = Math.sin(i / 18) * 0.5 + 0.5;
+      gearData[i] = (Math.random() * 2 - 1) * mod;
+    }
+
+    const gearNoise = ctx.createBufferSource();
+    gearNoise.buffer = gearBuf;
+    const gearFilter = ctx.createBiquadFilter();
+    gearFilter.type = "bandpass";
+    gearFilter.frequency.value = 1600;
+    gearFilter.Q.value = 2.0;
+
+    const gearGain = ctx.createGain();
+    gearGain.gain.setValueAtTime(0.001, motorStart);
+    gearGain.gain.linearRampToValueAtTime(0.25, motorStart + 0.05);
+    gearGain.gain.setValueAtTime(0.22, motorStart + motorDuration - 0.08);
+    gearGain.gain.exponentialRampToValueAtTime(0.001, motorStart + motorDuration);
+
+    gearNoise.connect(gearFilter);
+    gearFilter.connect(gearGain);
+    gearGain.connect(ctx.destination);
+    gearNoise.start(motorStart);
+    gearNoise.stop(motorStart + motorDuration);
+
+    // ── 3. Chemical Pod Crush Transient at ~200ms: "CRUNCH-POP" ──
+    const podTime = motorStart + 0.16;
+    const podOsc = ctx.createOscillator();
+    const podGain = ctx.createGain();
+    podOsc.type = "triangle";
+    podOsc.frequency.setValueAtTime(140, podTime);
+    podOsc.frequency.exponentialRampToValueAtTime(40, podTime + 0.08);
+    podGain.gain.setValueAtTime(0.3, podTime);
+    podGain.gain.exponentialRampToValueAtTime(0.001, podTime + 0.08);
+    podOsc.connect(podGain);
+    podGain.connect(ctx.destination);
+    podOsc.start(podTime);
+    podOsc.stop(podTime + 0.09);
+
+    // ── 4. Final Film Release Latch Clunk at ~750ms: "CHUNK" ──
+    const latchTime = motorStart + motorDuration;
+    const latchOsc = ctx.createOscillator();
+    const latchGain = ctx.createGain();
+    latchOsc.type = "sine";
+    latchOsc.frequency.setValueAtTime(320, latchTime);
+    latchOsc.frequency.exponentialRampToValueAtTime(60, latchTime + 0.05);
+    latchGain.gain.setValueAtTime(0.4, latchTime);
+    latchGain.gain.exponentialRampToValueAtTime(0.001, latchTime + 0.06);
+    latchOsc.connect(latchGain);
+    latchGain.connect(ctx.destination);
+    latchOsc.start(latchTime);
+    latchOsc.stop(latchTime + 0.07);
   } catch (err) {
     console.warn("Audio shutter effect bypassed:", err);
   }

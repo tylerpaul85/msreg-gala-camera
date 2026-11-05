@@ -25,7 +25,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Invalid electronic mail address. A valid address is required to deliver your developed gallery at midnight.",
+            "Invalid electronic mail address. A valid address is required to deliver your developed gallery at 8:00 PM CST.",
         },
         { status: 400 }
       );

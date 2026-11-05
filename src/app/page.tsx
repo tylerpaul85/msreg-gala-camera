@@ -79,7 +79,7 @@ export default function Home() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim())) {
       setFormError(
-        "Invalid electronic mail address. A valid address is required to deliver your developed gallery at midnight."
+        "Invalid electronic mail address. A valid address is required to deliver your developed gallery at 8:00 PM CST."
       );
       return;
     }
@@ -180,7 +180,7 @@ export default function Home() {
         <div className="my-6 flex items-center justify-center space-x-3">
           <span className="h-[1px] w-12 sm:w-20 bg-[#1E1C1A]/25" />
           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#5E5A54]">
-            Eight exposures. Develop at midnight.
+            Eight exposures. Releases at 8:00 PM CST.
           </span>
           <span className="h-[1px] w-12 sm:w-20 bg-[#1E1C1A]/25" />
         </div>
@@ -302,7 +302,7 @@ export default function Home() {
               <span>
                 Each guest receives 8 analog exposures. Returning guests are
                 re-connected to their active cartridge. All photographs remain
-                latent in the collective gallery until midnight.
+                latent in the collective gallery until 8:00 PM CST.
               </span>
             </div>
 

@@ -388,7 +388,7 @@ export default function AdminPage() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#1E1C1A]/15">
           <div>
             <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#6B2A2A] font-bold">
-              Midnight Event Reveal Master Control
+              8:00 PM CST Event Reveal Master Control
             </span>
             <h3 className="text-2xl font-serif text-[#1E1C1A] mt-1">
               Chemical Emulsion Status:{" "}
@@ -411,7 +411,7 @@ export default function AdminPage() {
                 onClick={() => setShowConfirmModal("reveal")}
                 className="py-3.5 px-6 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#6B2A2A] font-mono text-xs uppercase tracking-[0.25em] font-bold cursor-pointer transition-colors shadow-sm"
               >
-                ✦ Develop the Film (Midnight Reveal)
+                ✦ Develop the Film (8:00 PM CST Reveal)
               </button>
             ) : (
               <button
@@ -662,7 +662,7 @@ export default function AdminPage() {
                   Scan to Load Your 8 Exposures
                 </p>
                 <p className="font-serif italic text-xs text-[#5E5A54] leading-relaxed">
-                  Capture photographs throughout the night like a 1970s instant camera. All rolls remain latent until developing at midnight.
+                  Capture photographs throughout the night like a 1970s instant camera. All rolls remain latent until developing at 8:00 PM CST.
                 </p>
               </div>
 

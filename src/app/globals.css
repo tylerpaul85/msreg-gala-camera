@@ -159,3 +159,40 @@ input::placeholder {
 .safelight-theme h3 {
   color: #FFE6E6 !important;
 }
+
+/* Classic Polaroid OneStep / Land Camera Two-Tone Body Housing */
+.polaroid-camera-body {
+  background-color: #EDE5D5;
+  border: 2px solid #1E1C1A;
+  box-shadow: 0 4px 0 #1E1C1A;
+}
+
+/* Iconic Center Spectrum Stripe */
+.polaroid-stripe {
+  background: linear-gradient(
+    to right,
+    #6B2A2A 0%,
+    #6B2A2A 25%,
+    #B89758 25%,
+    #B89758 50%,
+    #EAE2D2 50%,
+    #EAE2D2 75%,
+    #1E1C1A 75%,
+    #1E1C1A 100%
+  );
+}
+
+/* Stepped Circular Lens Barrel */
+.lens-barrel-outer {
+  background: #151413;
+  border: 4px solid #2B2826;
+  border-radius: 9999px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.8), 0 2px 4px rgba(0,0,0,0.4);
+}
+
+/* Exposure Compensation Wheel (Lighten/Darken half-moon wheel) */
+.exposure-wheel {
+  background: linear-gradient(to right, #FAF7F0 50%, #151413 50%);
+  border: 2px solid #1E1C1A;
+  border-radius: 9999px;
+}

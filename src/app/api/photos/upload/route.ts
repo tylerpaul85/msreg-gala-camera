@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "All eight exposures have been exhausted. Your roll is complete and will develop at midnight.",
+            "All eight exposures have been exhausted. Your roll is complete and will develop at 8:00 PM CST.",
           shots_remaining: 0,
         },
         { status: 403 }
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Exposures exhausted. Your 8-shot roll has concluded and will develop at midnight.",
+            "Exposures exhausted. Your 8-shot roll has concluded and will develop at 8:00 PM CST.",
           shots_remaining: 0,
         },
         { status: 403 }

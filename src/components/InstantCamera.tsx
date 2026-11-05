@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { playShutterAndMotorSound, playLeverClick } from "@/lib/audio";
+import {
+  playPolaroidShutterSound,
+  playFlashChargingWhine,
+  playLeverClick,
+} from "@/lib/audio";
 import { compressImageToBlob } from "@/lib/image";
 
 interface Guest {
@@ -18,6 +22,7 @@ interface InstantCameraProps {
 }
 
 type UploadState = "idle" | "saving" | "retrying" | "success" | "failed";
+type FlashState = "off" | "charging" | "ready";
 
 export default function InstantCamera({
   guest: initialGuest,
@@ -32,6 +37,13 @@ export default function InstantCamera({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const [isFlashing, setIsFlashing] = useState(false);
+
+  // Innovation: Electronic Strobe Flash with Rising Capacitor Whine
+  const [flashState, setFlashState] = useState<FlashState>("off");
+  const stopWhineRef = useRef<(() => void) | null>(null);
+
+  // Exposure compensation knob state (-1 = Darken, 0 = Normal, 1 = Lighten)
+  const [exposureDial, setExposureDial] = useState<number>(0);
 
   // Captured snapshot state
   const [capturedDataUrl, setCapturedDataUrl] = useState<string | null>(null);
@@ -182,6 +194,9 @@ export default function InstantCamera({
       if (retryTimeoutRef.current) {
         clearTimeout(retryTimeoutRef.current);
       }
+      if (stopWhineRef.current) {
+        stopWhineRef.current();
+      }
     };
   }, []);
 
@@ -214,20 +229,56 @@ export default function InstantCamera({
     playLeverClick(false);
   };
 
+  // Toggle Flash and trigger capacitor charging whine sound
+  const handleToggleFlash = () => {
+    playLeverClick(isMuted);
+
+    if (flashState === "off") {
+      setFlashState("charging");
+      // Trigger classic Polaroid strobe capacitor whine
+      const stopWhine = playFlashChargingWhine(isMuted);
+      stopWhineRef.current = stopWhine;
+
+      // Finish charging after 2.1 seconds
+      setTimeout(() => {
+        setFlashState("ready");
+      }, 2100);
+    } else {
+      // Turn flash off
+      if (stopWhineRef.current) {
+        stopWhineRef.current();
+        stopWhineRef.current = null;
+      }
+      setFlashState("off");
+    }
+  };
+
+  // Rotate Lighten/Darken dial
+  const handleRotateDial = () => {
+    playLeverClick(isMuted);
+    setExposureDial((prev) => (prev === 1 ? -1 : prev + 1));
+  };
+
   // Trigger capture via Shutter button
   const handleShutterPress = async () => {
     if (uploadState !== "idle" || isDeveloping || guest.shots_remaining <= 0) return;
 
-    // Flash & haptics & audio
-    setIsFlashing(true);
-    setTimeout(() => setIsFlashing(false), 160);
+    // Flash pop if flash is active or auto
+    if (flashState === "ready" || flashState === "charging") {
+      setIsFlashing(true);
+      setTimeout(() => setIsFlashing(false), 240);
+      setFlashState("off"); // Discharged
+    } else {
+      setIsFlashing(true);
+      setTimeout(() => setIsFlashing(false), 140);
+    }
 
-    // Play 1970s instant camera shutter snap + mirror slap + motorized roller ejection sound
-    playShutterAndMotorSound(isMuted);
+    // Play authentic Polaroid solenoid click + gear motor whirr
+    playPolaroidShutterSound(isMuted);
 
     if (typeof navigator !== "undefined" && navigator.vibrate) {
       try {
-        navigator.vibrate([30, 40, 20]);
+        navigator.vibrate([35, 45, 25]);
       } catch {}
     }
 
@@ -444,7 +495,7 @@ export default function InstantCamera({
                 Exposures Completed
               </p>
               <p className="font-serif italic text-xs text-[#FAF7F0]/80 mt-1">
-                Developing at midnight
+                Photos release at 8:00 PM CST
               </p>
             </div>
             <div className="pt-3 pb-1 text-center">
@@ -458,7 +509,7 @@ export default function InstantCamera({
         <div className="relative z-10 space-y-6 pb-6">
           <p className="font-mono text-xs text-[#5E5A54] leading-relaxed max-w-md mx-auto">
             All photographs remain blurred in the collective gallery until the
-            formal reveal at the stroke of midnight.
+            formal unveiling at 8:00 PM CST on November 14, 2026.
           </p>
 
           <div className="space-y-3 max-w-xs mx-auto">
@@ -496,7 +547,7 @@ export default function InstantCamera({
     uploadState === "success";
 
   return (
-    <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-4 sm:px-6 sm:py-6 max-w-md mx-auto overflow-hidden safe-padding-top safe-padding-bottom">
+    <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-3 sm:px-6 sm:py-6 max-w-md mx-auto overflow-hidden safe-padding-top safe-padding-bottom">
       {/* Hidden file input for native camera fallback */}
       <input
         ref={fileInputRef}
@@ -507,15 +558,15 @@ export default function InstantCamera({
         className="hidden"
       />
 
-      {/* Shutter Fullscreen White Flash Overlay */}
+      {/* Shutter Fullscreen Strobe Flash Overlay */}
       <div
-        className={`fixed inset-0 z-50 bg-[#FFFFFF] pointer-events-none transition-opacity duration-150 ${
-          isFlashing ? "opacity-95" : "opacity-0"
+        className={`fixed inset-0 z-50 bg-[#FFFFFF] pointer-events-none transition-opacity duration-200 ${
+          isFlashing ? "opacity-100" : "opacity-0"
         }`}
       />
 
       {/* Top Header Bar */}
-      <div className="w-full flex items-center justify-between pb-3 border-b border-[#1E1C1A]/20 text-xs font-mono tracking-widest text-[#5E5A54]">
+      <div className="w-full flex items-center justify-between pb-2.5 border-b border-[#1E1C1A]/20 text-xs font-mono tracking-widest text-[#5E5A54]">
         <div className="flex items-center space-x-1.5">
           <span className="w-2 h-2 rounded-full bg-[#6B2A2A]" />
           <span className="uppercase text-[10px] tracking-[0.15em] font-medium text-[#1E1C1A]">
@@ -523,12 +574,12 @@ export default function InstantCamera({
           </span>
         </div>
 
-        <div className="flex items-center space-x-3 text-[10px] uppercase tracking-[0.18em]">
+        <div className="flex items-center space-x-2.5 text-[10px] uppercase tracking-[0.18em]">
           <button
             type="button"
             onClick={handleToggleMute}
             className="hover:text-[#1E1C1A] transition-colors cursor-pointer"
-            title="Toggle Shutter Audio"
+            title="Toggle Camera Audio"
           >
             {isMuted ? "Sound: Off" : "Sound: On"}
           </button>
@@ -552,283 +603,275 @@ export default function InstantCamera({
         </div>
       </div>
 
-      {/* 1970s Instant Land Camera Chassis */}
+      {/* ── CLASSIC POLAROID ONESTEP CAMERA HOUSING ── */}
       <div className="w-full my-auto flex flex-col items-center">
-        <div className="w-full camera-chassis text-[#F4EEE1] border-2 border-[#1E1C1A] p-4 sm:p-5 relative shadow-none">
-          {/* 1970s Iconic Racing Stripe Accent (Oxblood & Warm Brass) */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 flex">
-            <div className="w-1/2 bg-[#6B2A2A]" />
-            <div className="w-1/2 bg-[#B89758]" />
-          </div>
+        {/* Camera Outer Body (Classic Two-Tone Ivory/Cream & Matte Black Casing) */}
+        <div className="w-full polaroid-camera-body relative p-3 sm:p-4 text-[#1E1C1A]">
+          {/* Top Flash Bar & Electronic Capacitor Charging Unit */}
+          <div className="bg-[#1C1A18] text-[#F4EEE1] border border-[#1E1C1A] px-3 py-2 mb-3 flex items-center justify-between shadow-inner">
+            {/* Flash Strobe Window & Status */}
+            <div className="flex items-center space-x-2.5">
+              <button
+                type="button"
+                onClick={handleToggleFlash}
+                className={`px-2.5 py-1 text-[9px] font-mono tracking-widest uppercase border transition-all cursor-pointer flex items-center space-x-1.5 ${
+                  flashState === "ready"
+                    ? "bg-emerald-800 text-[#FAF7F0] border-emerald-400"
+                    : flashState === "charging"
+                    ? "bg-[#6B2A2A] text-[#FAF7F0] border-amber-400 animate-pulse"
+                    : "bg-[#2A2725] text-[#FAF7F0]/70 border-[#FAF7F0]/20 hover:text-[#FAF7F0]"
+                }`}
+                title="Tap to arm electronic Xenon flash"
+              >
+                <span>⚡</span>
+                <span>
+                  {flashState === "ready"
+                    ? "Flash: Ready"
+                    : flashState === "charging"
+                    ? "Charging..."
+                    : "Flash: Off"}
+                </span>
+              </button>
 
-          {/* Top Plate of the Camera: Controls & Mechanical Film Counter */}
-          <div className="flex items-center justify-between pb-3 border-b border-[#FAF7F0]/15 mb-3 mt-1">
-            {/* Vintage Mechanical Rotary Film Counter */}
-            <div className="flex items-center space-x-2 bg-[#0E0D0C] border border-[#FAF7F0]/30 px-3 py-1.5 shadow-inner">
-              <span className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#FAF7F0]/60">
-                EXPOSURES
+              {/* Capacitor Neon Ready LED */}
+              <div className="flex items-center space-x-1">
+                <span
+                  className={`w-2 h-2 rounded-full border border-[#1E1C1A] ${
+                    flashState === "ready"
+                      ? "bg-emerald-400 shadow-[0_0_6px_#34d399]"
+                      : flashState === "charging"
+                      ? "bg-amber-400 animate-ping"
+                      : "bg-[#3D3834]"
+                  }`}
+                />
+                <span className="font-mono text-[8px] uppercase tracking-wider text-[#FAF7F0]/60">
+                  {flashState === "ready" ? "Charged" : flashState === "charging" ? "Charging" : "Strobe"}
+                </span>
+              </div>
+            </div>
+
+            {/* Mechanical Film Exposure Counter Window */}
+            <div className="flex items-center space-x-1.5 bg-[#0E0D0C] border border-[#FAF7F0]/30 px-2.5 py-1">
+              <span className="font-mono text-[8px] uppercase tracking-[0.2em] text-[#FAF7F0]/60">
+                EXP.
               </span>
               <span className="font-mono text-sm tracking-widest font-bold text-[#FAF7F0]">
                 {guest.shots_remaining} / 8
               </span>
             </div>
+          </div>
 
-            {/* Lens and Status Badges */}
-            <div className="flex items-center space-x-2">
-              <div className="flex items-center space-x-1.5 px-2 py-1 bg-[#282624] border border-[#FAF7F0]/20 text-[9px] font-mono tracking-widest uppercase">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[#FAF7F0]/90">Aperture Ready</span>
-              </div>
+          {/* Main Camera Faceplate: Dark Charcoal Textured Housing */}
+          <div className="bg-[#1C1A18] border-2 border-[#1E1C1A] p-3 sm:p-4 relative overflow-hidden">
+            {/* The Iconic Polaroid Quad-Color Spectrum Stripe (running straight down) */}
+            <div className="absolute top-0 bottom-0 left-1/2 -translate-x-1/2 w-4 polaroid-stripe opacity-90 pointer-events-none z-10" />
 
-              {/* Flip Camera Control */}
+            {/* Header Plate on Camera Face */}
+            <div className="flex items-center justify-between pb-2 text-[8px] font-mono uppercase tracking-[0.25em] text-[#FAF7F0]/60 z-20 relative">
+              <span className="font-bold text-[#B89758]">POLAROID LAND CAMERA</span>
               <button
                 type="button"
                 onClick={handleFlipLens}
                 disabled={Boolean(capturedDataUrl)}
-                className="px-2.5 py-1 bg-[#282624] hover:bg-[#383533] border border-[#FAF7F0]/25 text-[9px] font-mono tracking-widest uppercase text-[#FAF7F0] cursor-pointer transition-colors"
-                title="Flip to front / rear lens"
+                className="px-2 py-0.5 bg-[#2B2826] hover:bg-[#3D3A37] border border-[#FAF7F0]/25 text-[8px] font-mono tracking-widest uppercase text-[#FAF7F0] cursor-pointer transition-colors"
+                title="Flip to front / rear camera"
               >
-                Flip
+                Flip Lens ↻
               </button>
+            </div>
+
+            {/* Large Stepped Circular Lens Barrel housing the Viewfinder */}
+            <div className="relative mx-auto aspect-square w-full max-w-[270px] sm:max-w-[300px] lens-barrel-outer p-2 flex items-center justify-center overflow-hidden z-20">
+              {/* Live Viewfinder Feed inside the circular/rounded aperture */}
+              <div className="relative w-full h-full rounded-full overflow-hidden bg-[#0A0908] border border-[#FAF7F0]/20 flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  autoPlay
+                  className={`absolute inset-0 w-full h-full object-cover vintage-lens-feed transition-opacity duration-300 ${
+                    isCameraActive && !capturedDataUrl ? "opacity-100" : "opacity-0"
+                  }`}
+                />
+
+                {/* Rangefinder Optical Split Ring */}
+                {isCameraActive && !capturedDataUrl && (
+                  <div className="rangefinder-split z-10 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-[#FAF7F0]/60" />
+                  </div>
+                )}
+
+                {/* Fallback View if camera permission denied */}
+                {!isCameraActive && !capturedDataUrl && (
+                  <div className="p-4 text-center space-y-3 z-10 max-w-[220px]">
+                    <div className="w-12 h-12 rounded-full border border-[#FAF7F0]/20 mx-auto flex items-center justify-center">
+                      <div className="w-6 h-6 rounded-full border border-[#6B2A2A]" />
+                    </div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#FAF7F0]/70 leading-tight">
+                      {cameraError || "Optical lens ready..."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-block py-2 px-3 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#FAF7F0]/40 font-mono text-[9px] uppercase tracking-[0.2em] cursor-pointer"
+                    >
+                      Camera Roll
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Chemical Developing Preview on Captured Polaroid */}
+              {capturedDataUrl && (
+                <div className="absolute inset-0 bg-[#0C0B0A]/95 rounded-full flex items-center justify-center p-2 z-40 animate-[fadeIn_0.3s_ease-out]">
+                  <div
+                    onPointerMove={handleEmulsionRub}
+                    onClick={handleEmulsionRub}
+                    className="polaroid-frame w-full max-w-[210px] border border-[#1E1C1A]/40 transition-transform duration-500 ease-out select-none cursor-pointer"
+                    title="Rub emulsion to accelerate development"
+                  >
+                    <div className="aspect-square relative overflow-hidden bg-[#181615] border border-[#1E1C1A]/30">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={capturedDataUrl}
+                        alt="Captured instant exposure"
+                        className="w-full h-full object-cover transition-all duration-300"
+                        style={{
+                          filter: isDeveloping
+                            ? `brightness(${0.22 + (developmentProgress / 100) * 0.78}) contrast(${
+                                1.6 - (developmentProgress / 100) * 0.6
+                              }) saturate(${
+                                0.15 + (developmentProgress / 100) * 0.85
+                              }) blur(${
+                                (1 - developmentProgress / 100) * 2.2
+                              }px)`
+                            : "none",
+                        }}
+                      />
+
+                      {/* Milky Opacifier Layer */}
+                      {isDeveloping && (
+                        <div
+                          className="absolute inset-0 pointer-events-none transition-opacity duration-300 mix-blend-screen"
+                          style={{
+                            backgroundColor: "#3A4A48",
+                            opacity: (1 - developmentProgress / 100) * 0.75,
+                          }}
+                        />
+                      )}
+
+                      {/* Progress Prompt */}
+                      {isDeveloping && (
+                        <div className="absolute inset-x-0 bottom-0 bg-[#0E0D0C]/90 px-1.5 py-1 flex items-center justify-between text-[8px] font-mono uppercase tracking-widest text-[#FAF7F0]">
+                          <span>{hasInteractedWithEmulsion ? "Warming..." : "Rub to clear"}</span>
+                          <span className="font-bold text-[#B89758]">{developmentProgress}%</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Handwritten Caption Chin */}
+                    <div className="pt-2 pb-0.5">
+                      <input
+                        type="text"
+                        maxLength={50}
+                        placeholder="A handwritten note..."
+                        value={caption}
+                        onChange={(e) => setCaption(e.target.value)}
+                        disabled={isBusy}
+                        className="w-full text-center font-hand text-sm text-[#1E1C1A] placeholder:text-[#8A847C]/60 border-b border-[#1E1C1A]/20 bg-transparent py-0.5 focus:border-[#6B2A2A] outline-none"
+                      />
+
+                      {uploadState !== "idle" && (
+                        <div className="pt-1 text-center font-mono text-[8px] uppercase tracking-wider text-[#6B2A2A]">
+                          {uploadState === "saving" && "Saving plate..."}
+                          {uploadState === "retrying" && `Retrying (${uploadAttempt}/4)...`}
+                          {uploadState === "success" && "✓ Sealed in vault"}
+                          {uploadState === "failed" && "! Signal pending"}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Front Controls Deck: Lighten/Darken Dial & The Iconic Shutter Button */}
+            <div className="flex items-center justify-between pt-3 z-20 relative">
+              {/* Exposure Compensation Dial (Lighten / Darken) */}
+              <button
+                type="button"
+                onClick={handleRotateDial}
+                className="flex items-center space-x-2 bg-[#121110] border border-[#FAF7F0]/20 px-2 py-1 cursor-pointer hover:border-[#FAF7F0]/40 transition-colors"
+                title="Exposure Compensation: Lighten / Darken"
+              >
+                <div className="w-5 h-5 exposure-wheel" />
+                <span className="font-mono text-[8px] uppercase tracking-wider text-[#FAF7F0]/70">
+                  {exposureDial === 1
+                    ? "Lighten"
+                    : exposureDial === -1
+                    ? "Darken"
+                    : "Normal"}
+                </span>
+              </button>
+
+              {/* The Iconic Round Polaroid Red/Oxblood Shutter Button */}
+              {!capturedDataUrl ? (
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-[9px] uppercase tracking-widest text-[#FAF7F0]/60">
+                    SHUTTER
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleShutterPress}
+                    className="group relative w-16 h-16 rounded-full bg-[#151413] border-4 border-[#353230] flex items-center justify-center cursor-pointer active:scale-95 transition-transform focus:outline-none shadow-md"
+                    aria-label="Release Polaroid Shutter"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-[#6B2A2A] group-hover:bg-[#853434] transition-colors border border-[#FAF7F0]/40 flex items-center justify-center">
+                      <div className="w-4 h-4 rounded-full border border-[#FAF7F0]/40" />
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                /* Review Controls */
+                <div className="flex space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleRetake}
+                    disabled={isBusy}
+                    className="py-1.5 px-3 bg-transparent hover:bg-[#FAF7F0]/10 text-[#FAF7F0]/80 border border-[#FAF7F0]/30 font-mono text-[9px] uppercase tracking-wider cursor-pointer"
+                  >
+                    Retake
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmPhoto}
+                    disabled={isBusy}
+                    className="py-1.5 px-4 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] font-mono text-[9px] uppercase tracking-wider font-bold cursor-pointer"
+                  >
+                    Confirm ({guest.shots_remaining})
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {/* Camera Lens Nameplate Badge */}
-          <div className="flex items-center justify-between pb-2 text-[8px] font-mono uppercase tracking-[0.25em] text-[#FAF7F0]/40">
-            <span>MSREG 1974 LAND CAMERA</span>
-            <span>116mm f/8.0 GLASS OPTIC</span>
-          </div>
-
-          {/* Viewfinder Glass Chamber */}
-          <div className="relative aspect-square w-full bg-[#0C0B0A] border-2 border-[#FAF7F0]/25 overflow-hidden flex items-center justify-center">
-            {/* Live Camera Video Feed */}
-            <video
-              ref={videoRef}
-              playsInline
-              muted
-              autoPlay
-              className={`absolute inset-0 w-full h-full object-cover vintage-lens-feed transition-opacity duration-300 ${
-                isCameraActive && !capturedDataUrl ? "opacity-100" : "opacity-0"
-              }`}
-            />
-
-            {/* Optical Split-Image Rangefinder Prism Center Ring */}
-            {isCameraActive && !capturedDataUrl && (
-              <div className="rangefinder-split z-10 flex items-center justify-center">
-                <div className="w-2 h-2 rounded-full bg-[#FAF7F0]/50" />
-              </div>
-            )}
-
-            {/* Fallback View if camera permission denied or waiting */}
-            {!isCameraActive && !capturedDataUrl && (
-              <div className="p-6 text-center space-y-4 z-10 max-w-xs">
-                <div className="w-16 h-16 rounded-full border border-[#FAF7F0]/20 mx-auto flex items-center justify-center">
-                  <div className="w-8 h-8 rounded-full border border-[#6B2A2A]" />
-                </div>
-                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#FAF7F0]/70 leading-relaxed">
-                  {cameraError || "Initializing optical aperture..."}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-block py-2.5 px-4 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#FAF7F0]/40 font-mono text-[10px] uppercase tracking-[0.2em] cursor-pointer"
-                >
-                  Engage Camera Roll
-                </button>
-              </div>
-            )}
-
-            {/* Viewfinder Crosshair & Corner Etchings */}
-            {isCameraActive && !capturedDataUrl && (
-              <div className="pointer-events-none absolute inset-0 p-4 flex flex-col justify-between z-10">
-                <div className="flex justify-between">
-                  <span className="w-3 h-3 border-t-2 border-l-2 border-[#FAF7F0]/60" />
-                  <span className="w-3 h-3 border-t-2 border-r-2 border-[#FAF7F0]/60" />
-                </div>
-                <div className="flex justify-between">
-                  <span className="w-3 h-3 border-b-2 border-l-2 border-[#FAF7F0]/60" />
-                  <span className="w-3 h-3 border-b-2 border-r-2 border-[#FAF7F0]/60" />
-                </div>
-              </div>
-            )}
-
-            {/* Mechanical Film Ejection & Photochemical Developing Preview */}
-            {capturedDataUrl && (
-              <div className="absolute inset-0 bg-[#0C0B0A]/95 flex items-center justify-center p-3 z-30 animate-[fadeIn_0.3s_ease-out]">
-                <div
-                  onPointerMove={handleEmulsionRub}
-                  onClick={handleEmulsionRub}
-                  className="polaroid-frame w-full max-w-[280px] border border-[#1E1C1A]/40 transition-transform duration-500 ease-out select-none cursor-pointer"
-                  title="Wipe or warm emulsion to accelerate development"
-                >
-                  {/* Photo area with chemical opacifier fading filter */}
-                  <div className="aspect-square relative overflow-hidden bg-[#181615] border border-[#1E1C1A]/30">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={capturedDataUrl}
-                      alt="Captured instant exposure"
-                      className="w-full h-full object-cover transition-all duration-300"
-                      style={{
-                        filter: isDeveloping
-                          ? `brightness(${0.22 + (developmentProgress / 100) * 0.78}) contrast(${
-                              1.6 - (developmentProgress / 100) * 0.6
-                            }) saturate(${
-                              0.15 + (developmentProgress / 100) * 0.85
-                            }) blur(${
-                              (1 - developmentProgress / 100) * 2.2
-                            }px)`
-                          : "none",
-                      }}
-                    />
-
-                    {/* Milky Chemical Opacifier Layer (authentic SX-70 blue/green opacifier) */}
-                    {isDeveloping && (
-                      <div
-                        className="absolute inset-0 pointer-events-none transition-opacity duration-300 mix-blend-screen"
-                        style={{
-                          backgroundColor: "#3A4A48",
-                          opacity: (1 - developmentProgress / 100) * 0.75,
-                        }}
-                      />
-                    )}
-
-                    {/* Developing Progress Bar & Gesture Prompt */}
-                    {isDeveloping && (
-                      <div className="absolute inset-x-0 bottom-0 bg-[#0E0D0C]/90 px-2 py-1.5 flex items-center justify-between text-[9px] font-mono uppercase tracking-widest text-[#FAF7F0]">
-                        <span className="flex items-center space-x-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#B89758] animate-ping" />
-                          <span>
-                            {hasInteractedWithEmulsion
-                              ? "Warming Emulsion..."
-                              : "Rub to develop"}
-                          </span>
-                        </span>
-                        <span className="font-bold text-[#B89758]">
-                          {developmentProgress}%
-                        </span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Handwritten Caption Chin */}
-                  <div className="pt-2.5 pb-1">
-                    <input
-                      type="text"
-                      maxLength={60}
-                      placeholder="A handwritten note for the vault..."
-                      value={caption}
-                      onChange={(e) => setCaption(e.target.value)}
-                      disabled={isBusy}
-                      className="w-full text-center font-hand text-base sm:text-lg text-[#1E1C1A] placeholder:text-[#8A847C]/60 border-b border-[#1E1C1A]/20 bg-transparent py-1 focus:border-[#6B2A2A] outline-none"
-                    />
-
-                    {/* Subtle Polaroid status state */}
-                    {uploadState !== "idle" && (
-                      <div className="pt-1.5 pb-0.5 text-center">
-                        {uploadState === "saving" && (
-                          <span className="inline-flex items-center space-x-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[#6B2A2A]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#6B2A2A] animate-ping" />
-                            <span>Saving exposure to gala vault...</span>
-                          </span>
-                        )}
-                        {uploadState === "retrying" && (
-                          <span className="inline-flex items-center space-x-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[#6B2A2A]">
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#6B2A2A] animate-pulse" />
-                            <span>Slow venue signal — retrying ({uploadAttempt}/4)...</span>
-                          </span>
-                        )}
-                        {uploadState === "success" && (
-                          <span className="inline-flex items-center space-x-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-emerald-800">
-                            <span>✓ Sealed in archival vault</span>
-                          </span>
-                        )}
-                        {uploadState === "failed" && (
-                          <span className="inline-flex items-center space-x-1.5 font-mono text-[9px] uppercase tracking-[0.18em] text-[#6B2A2A]">
-                            <span>! Signal pending — tap confirm below</span>
-                          </span>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Camera Bottom Deck: Motor Roller Slit & Tactile Shutter */}
-          <div className="pt-4 pb-1 flex flex-col items-center justify-center">
-            {/* Physical Metallic Film Roller Delivery Slot */}
-            <div className="w-48 h-1 bg-[#0A0908] border-b border-[#FAF7F0]/20 mb-4 rounded-full opacity-60" />
-
-            {uploadError && (
-              <div className="w-full mb-3 p-2 bg-[#FAF7F0] border border-[#6B2A2A] text-[#6B2A2A] font-mono text-[10px] uppercase tracking-wider text-center">
-                {uploadError}
-              </div>
-            )}
-
-            {!capturedDataUrl ? (
-              /* Big Round Mechanical Shutter Button */
-              <div className="flex flex-col items-center space-y-2">
-                <button
-                  type="button"
-                  onClick={handleShutterPress}
-                  className="group relative w-20 h-20 rounded-full bg-[#181615] border-4 border-[#3D3A37] flex items-center justify-center cursor-pointer active:scale-95 transition-transform focus:outline-none"
-                  aria-label="Release Mechanical Shutter"
-                >
-                  <div className="w-16 h-16 rounded-full border border-[#FAF7F0]/20 flex items-center justify-center bg-[#252220]">
-                    <div className="w-12 h-12 rounded-full bg-[#6B2A2A] group-hover:bg-[#853434] transition-colors border border-[#FAF7F0]/30 shadow-none flex items-center justify-center">
-                      <div className="w-6 h-6 rounded-full border border-[#FAF7F0]/30" />
-                    </div>
-                  </div>
-                </button>
-                <span className="font-mono text-[9px] uppercase tracking-[0.25em] text-[#FAF7F0]/50">
-                  Press Shutter
-                </span>
-              </div>
-            ) : (
-              /* Review Controls: Retake vs Confirm */
-              <div className="w-full space-y-2">
-                <button
-                  type="button"
-                  onClick={handleConfirmPhoto}
-                  disabled={isBusy}
-                  className="w-full py-3 px-4 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#FAF7F0]/30 font-mono text-xs uppercase tracking-[0.22em] text-center cursor-pointer transition-colors disabled:opacity-60"
-                >
-                  {uploadState === "saving" ? (
-                    <span className="flex items-center justify-center space-x-2">
-                      <span className="inline-block w-2 h-2 bg-[#FAF7F0] animate-ping" />
-                      <span>Sealing into Gala Vault...</span>
-                    </span>
-                  ) : uploadState === "retrying" ? (
-                    <span className="flex items-center justify-center space-x-2">
-                      <span className="inline-block w-2 h-2 bg-[#FAF7F0] animate-pulse" />
-                      <span>Retransmitting plate...</span>
-                    </span>
-                  ) : uploadState === "failed" ? (
-                    <span>Retry Saving Plate</span>
-                  ) : (
-                    <span>Confirm Exposure ({guest.shots_remaining} Remaining)</span>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleRetake}
-                  disabled={isBusy}
-                  className="w-full py-2.5 px-4 bg-transparent hover:bg-[#FAF7F0]/10 text-[#FAF7F0]/75 hover:text-[#FAF7F0] border border-[#FAF7F0]/20 font-mono text-[10px] uppercase tracking-[0.2em] text-center cursor-pointer transition-colors"
-                >
-                  Discard & Retake (No Exposure Lost)
-                </button>
-              </div>
-            )}
+          {/* Bottom Ejection Mouth / Film Roller Door (Classic Polaroid Ejection Slot) */}
+          <div className="mt-2 pt-2 border-t-2 border-[#1E1C1A] flex flex-col items-center">
+            {/* The Black Film Slot with the Roller Lip */}
+            <div className="w-56 h-2 bg-[#121110] border border-[#1E1C1A] rounded-sm relative overflow-hidden flex items-center justify-center">
+              <div className="w-40 h-[1px] bg-[#FAF7F0]/20" />
+            </div>
+            <span className="font-mono text-[8px] uppercase tracking-[0.25em] text-[#5E5A54] mt-1">
+              ▼ FILM DELIVERY SLOT • 800 SPEED ▼
+            </span>
           </div>
         </div>
       </div>
 
       {/* Camera Base Footer / Colophon */}
-      <footer className="w-full text-center pt-3 border-t border-[#1E1C1A]/15">
+      <footer className="w-full text-center pt-2 border-t border-[#1E1C1A]/15">
         <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#5E5A54]">
-          1970s Instant Emulsion • MSREG Gala Camera No. 1974
+          MSREG Client Gala • Photos Release at 8:00 PM CST
         </p>
       </footer>
     </main>

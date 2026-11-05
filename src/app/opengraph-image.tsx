@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "MSREG Gala Camera — Eight exposures. Develop at midnight.";
+export const alt = "MSREG Gala Camera — Eight exposures. Develop at 8:00 PM CST.";
 export const size = {
   width: 1200,
   height: 630,
@@ -138,7 +138,7 @@ export default async function Image() {
                 color: "#5E5A54",
               }}
             >
-              Eight exposures. Develop at midnight.
+              Eight exposures. Develop at 8:00 PM CST.
             </span>
             <div
               style={{

@@ -37,13 +37,13 @@ export default function GalleryPage() {
   // Live midnight countdown calculation
   useEffect(() => {
     function updateCountdown() {
-      // Midnight target: November 15, 2026 at 00:00:00
-      const target = new Date("2026-11-15T00:00:00").getTime();
+      // Release target: November 14, 2026 at 8:00 PM CST (UTC-6)
+      const target = new Date("2026-11-14T20:00:00-06:00").getTime();
       const now = Date.now();
       const diff = target - now;
 
       if (diff <= 0) {
-        setCountdownText("00h : 00m : 00s — Midnight Unveiled");
+        setCountdownText("00h : 00m : 00s — Released at 8:00 PM CST");
         return;
       }
 
@@ -52,7 +52,7 @@ export default function GalleryPage() {
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
       const pad = (n: number) => String(n).padStart(2, "0");
-      setCountdownText(`${pad(hours)}h : ${pad(minutes)}m : ${pad(seconds)}s`);
+      setCountdownText(`${pad(hours)}h : ${pad(minutes)}m : ${pad(seconds)}s to 8:00 PM CST`);
     }
 
     updateCountdown();
@@ -158,7 +158,7 @@ export default function GalleryPage() {
                   <div className="inline-flex items-center space-x-2 px-3 py-1 bg-[#FAF7F0] border border-[#1E1C1A]/20">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#6B2A2A] animate-ping" />
                     <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#6B2A2A]">
-                      Developing. Check back at the end of the night.
+                      Developing. Releases at 8:00 PM CST.
                     </span>
                   </div>
 
@@ -173,7 +173,7 @@ export default function GalleryPage() {
                 <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-[#FAF7F0] border-2 border-[#6B2A2A] text-[#6B2A2A]">
                   <span className="w-2 h-2 rounded-full bg-emerald-600" />
                   <span className="font-mono text-xs uppercase tracking-[0.22em] font-bold">
-                    Midnight Unveiling • All Exposures Developed
+                    8:00 PM CST Unveiling • All Exposures Developed
                   </span>
                 </div>
               )}
@@ -324,7 +324,7 @@ export default function GalleryPage() {
                 {!revealed && (
                   <div className="absolute inset-0 bg-[#1E1C1A]/40 flex flex-col items-center justify-center p-4 text-center pointer-events-none">
                     <span className="font-mono text-xs uppercase tracking-[0.25em] text-[#FAF7F0] bg-[#1E1C1A]/85 px-3 py-1.5 border border-[#FAF7F0]/30">
-                      {isInspectingNegative ? "Negative Inspection Active" : "Developing at Midnight"}
+                      {isInspectingNegative ? "Negative Inspection Active" : "Releases at 8:00 PM CST"}
                     </span>
                     <p className="font-serif italic text-xs text-[#FAF7F0]/80 mt-2">
                       {isInspectingNegative
