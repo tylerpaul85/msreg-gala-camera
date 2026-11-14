@@ -4,8 +4,9 @@ import { uploadAndRecordPhoto } from "@/lib/db";
 
 export async function POST(request: Request) {
   try {
-    // 1. Authenticate guest via session token cookie
-    const guest = await getCurrentGuest();
+    // 1. Authenticate guest via session token cookie or explicit x-session-token header
+    const headerToken = request.headers.get("x-session-token");
+    const guest = await getCurrentGuest(headerToken);
 
     if (!guest) {
       return NextResponse.json(

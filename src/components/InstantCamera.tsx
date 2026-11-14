@@ -7,6 +7,11 @@ import {
   playLeverClick,
 } from "@/lib/audio";
 import { compressImageToBlob } from "@/lib/image";
+import {
+  enqueueExposure,
+  subscribeToQueue,
+  QueueStatus,
+} from "@/lib/uploadQueue";
 
 interface Guest {
   id: string;
@@ -21,7 +26,6 @@ interface InstantCameraProps {
   onRollExhausted?: () => void;
 }
 
-type UploadState = "idle" | "saving" | "retrying" | "success" | "failed";
 type FlashState = "off" | "charging" | "ready";
 type PhotoLifecycle = "idle" | "ejecting" | "inspecting" | "vaulting";
 
@@ -55,16 +59,17 @@ export default function InstantCamera({
   const [developmentProgress, setDevelopmentProgress] = useState(0); // 0 to 100
   const [hasInteractedWithEmulsion, setHasInteractedWithEmulsion] = useState(false);
 
-  // Resilient venue Wi-Fi upload state
-  const [uploadState, setUploadState] = useState<UploadState>("idle");
-  const [uploadAttempt, setUploadAttempt] = useState(1);
-  const [uploadError, setUploadError] = useState<string | null>(null);
+  // Resilient venue Wi-Fi / cell network background sync queue status
+  const [queueStatus, setQueueStatus] = useState<QueueStatus>({
+    pendingCount: 0,
+    isUploading: false,
+    isOffline: false,
+    lastError: null,
+  });
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const pendingRetryFnRef = useRef<(() => void) | null>(null);
 
   // Stop camera stream cleanly
   const stopStream = useCallback(() => {
@@ -190,33 +195,31 @@ export default function InstantCamera({
     };
   }, [facingMode, guest.shots_remaining, lifecycle, startCamera, stopStream]);
 
-  // Clean up any pending retry timeouts
+  // Subscribe to background upload queue for venue offline resiliency
+  useEffect(() => {
+    const unsubscribe = subscribeToQueue((status) => {
+      setQueueStatus(status);
+      if (typeof status.lastServerShotsRemaining === "number") {
+        setGuest((prev) => ({
+          ...prev,
+          shots_remaining: status.lastServerShotsRemaining!,
+        }));
+        if (status.lastServerShotsRemaining === 0) {
+          onRollExhausted?.();
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [onRollExhausted]);
+
+  // Clean up any pending capacitor whines
   useEffect(() => {
     return () => {
-      if (retryTimeoutRef.current) {
-        clearTimeout(retryTimeoutRef.current);
-      }
       if (stopWhineRef.current) {
         stopWhineRef.current();
       }
     };
-  }, []);
-
-  // Listen to network reconnection on slow/flaky venue Wi-Fi
-  useEffect(() => {
-    const handleOnline = () => {
-      if (pendingRetryFnRef.current) {
-        console.log("Device reconnected to venue network. Triggering immediate exposure upload retry.");
-        if (retryTimeoutRef.current) {
-          clearTimeout(retryTimeoutRef.current);
-          retryTimeoutRef.current = null;
-        }
-        pendingRetryFnRef.current();
-      }
-    };
-
-    window.addEventListener("online", handleOnline);
-    return () => window.removeEventListener("online", handleOnline);
   }, []);
 
   // Flip lens between rear and front camera
@@ -263,7 +266,7 @@ export default function InstantCamera({
 
   // Trigger capture via Shutter button
   const handleShutterPress = async () => {
-    if (uploadState !== "idle" || isDeveloping || guest.shots_remaining <= 0) return;
+    if (lifecycle !== "idle" || isDeveloping || guest.shots_remaining <= 0) return;
 
     const shouldFlash = flashState === "ready" || flashState === "charging";
 
@@ -314,15 +317,15 @@ export default function InstantCamera({
       try {
         const { blob, dataUrl } = await compressImageToBlob(
           videoRef.current,
-          1600,
-          0.8,
+          1080,
+          0.68,
           true // Square 1:1 Polaroid crop matching viewfinder
         );
         stopStream();
         initiateDeveloping(dataUrl, blob);
       } catch (err) {
         console.error("Frame capture failed:", err);
-        setUploadError(
+        setCameraError(
           "A shutter jam occurred while capturing the frame. Please try again."
         );
       }
@@ -339,11 +342,11 @@ export default function InstantCamera({
     if (!file) return;
 
     try {
-      const { blob, dataUrl } = await compressImageToBlob(file, 1600, 0.8);
+      const { blob, dataUrl } = await compressImageToBlob(file, 1080, 0.68, true);
       initiateDeveloping(dataUrl, blob);
     } catch (err) {
       console.error("Failed to process loaded plate:", err);
-      setUploadError("Could not expose photograph from the selected file.");
+      setCameraError("Could not expose photograph from the selected file.");
     } finally {
       if (e.target) e.target.value = "";
     }
@@ -358,8 +361,7 @@ export default function InstantCamera({
     setIsDeveloping(true);
     setDevelopmentProgress(0);
     setHasInteractedWithEmulsion(false);
-    setUploadError(null);
-    setUploadState("idle");
+    setCameraError(null);
 
     // Film takes ~1.45 seconds to roll out of the delivery slot between the rollers
     setTimeout(() => {
@@ -391,125 +393,48 @@ export default function InstantCamera({
   // Retake photo: discard without deducting exposure
   const handleRetake = () => {
     playLeverClick(isMuted);
-    if (retryTimeoutRef.current) {
-      clearTimeout(retryTimeoutRef.current);
-      retryTimeoutRef.current = null;
-    }
-    pendingRetryFnRef.current = null;
     setCapturedDataUrl(null);
     setCapturedBlob(null);
     setCaption("");
     setLifecycle("idle");
     setIsDeveloping(false);
-    setUploadState("idle");
-    setUploadError(null);
   };
 
-  // Execute upload with automatic retry queue for spotty ballroom Wi-Fi
-  const executeUpload = async (blob: Blob, photoCaption: string, attemptNumber = 1) => {
-    setUploadAttempt(attemptNumber);
-    setUploadState(attemptNumber === 1 ? "saving" : "retrying");
-    setUploadError(null);
+  // Confirm photo button handler: Non-blocking, instant optimistic vaulting
+  const handleConfirmPhoto = () => {
+    if (!capturedDataUrl) return;
 
-    const maxAttempts = 4;
-    const backoffDelays = [0, 2500, 5000, 10000];
+    playLeverClick(isMuted);
+    setLifecycle("vaulting");
 
-    try {
-      const formData = new FormData();
-      formData.append("photo", blob, "exposure.jpg");
-      if (photoCaption.trim()) {
-        formData.append("caption", photoCaption.trim());
-      }
+    // Optimistically deduct 1 shot immediately so user sees instant feedback
+    const remaining = Math.max(0, guest.shots_remaining - 1);
+    setGuest((prev) => ({
+      ...prev,
+      shots_remaining: remaining,
+    }));
 
-      const headers: Record<string, string> = {};
-      const localToken =
-        typeof window !== "undefined"
-          ? localStorage.getItem("msreg_gala_session_token")
-          : null;
-      if (localToken) {
-        headers["x-session-token"] = localToken;
-      }
+    // Enqueue for resilient background transmission across venue networks
+    enqueueExposure({
+      dataUrl: capturedDataUrl,
+      caption: caption.trim(),
+    });
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
-
-      const res = await fetch("/api/photos/upload", {
-        method: "POST",
-        headers,
-        body: formData,
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-      const data = await res.json();
-
-      if (!res.ok) {
-        if (res.status === 403) {
-          throw new Error(data.error || "Roll has reached capacity");
-        }
-        throw new Error(data.error || "Darkroom upload failed");
-      }
-
-      pendingRetryFnRef.current = null;
-      setUploadState("success");
-      setLifecycle("vaulting");
-
-      const remaining = data.shots_remaining ?? Math.max(0, guest.shots_remaining - 1);
-      setGuest((prev) => ({
-        ...prev,
-        shots_remaining: remaining,
-      }));
+    // Smoothly dismiss the inspection modal and return to camera within 550ms
+    setTimeout(() => {
+      setCapturedDataUrl(null);
+      setCapturedBlob(null);
+      setCaption("");
+      setLifecycle("idle");
 
       if (remaining === 0) {
-        setTimeout(() => {
-          onRollExhausted?.();
-        }, 800);
+        onRollExhausted?.();
       }
-
-      setTimeout(() => {
-        setCapturedDataUrl(null);
-        setCapturedBlob(null);
-        setCaption("");
-        setUploadState("idle");
-        setLifecycle("idle");
-      }, 700);
-    } catch (err: any) {
-      console.warn(`Upload attempt ${attemptNumber} failed:`, err);
-
-      if (attemptNumber < maxAttempts) {
-        const nextAttempt = attemptNumber + 1;
-        const delay = backoffDelays[attemptNumber] || 5000;
-        setUploadState("retrying");
-        setUploadAttempt(nextAttempt);
-
-        const retryFn = () => {
-          executeUpload(blob, photoCaption, nextAttempt);
-        };
-        pendingRetryFnRef.current = retryFn;
-
-        retryTimeoutRef.current = setTimeout(() => {
-          retryFn();
-        }, delay);
-      } else {
-        pendingRetryFnRef.current = () => executeUpload(blob, photoCaption, 1);
-        setUploadState("failed");
-        setUploadError(
-          "Weak ballroom signal. Your exposure is safe in buffer — tap below to re-transmit."
-        );
-      }
-    }
+    }, 550);
   };
 
-  // Confirm photo button handler
-  const handleConfirmPhoto = () => {
-    if (!capturedBlob || uploadState === "saving" || uploadState === "retrying" || uploadState === "success") {
-      return;
-    }
-    executeUpload(capturedBlob, caption, 1);
-  };
-
-  // If all 8 exposures have been exhausted, display the archival closing roll screen
-  if (guest.shots_remaining <= 0 && !capturedDataUrl) {
+  // If all 8 exposures have been exhausted and no photo is being reviewed, display closing roll screen
+  if (guest.shots_remaining <= 0 && lifecycle === "idle") {
     return (
       <main className="relative min-h-screen flex flex-col justify-between px-4 py-8 sm:px-8 sm:py-12 max-w-xl mx-auto text-center safe-padding-top safe-padding-bottom">
         <div className="absolute inset-3 sm:inset-5 pointer-events-none border border-[#1E1C1A]/20" />
@@ -581,10 +506,7 @@ export default function InstantCamera({
     );
   }
 
-  const isBusy =
-    uploadState === "saving" ||
-    uploadState === "retrying" ||
-    uploadState === "success";
+  const isBusy = lifecycle === "vaulting";
 
   return (
     <main className="relative min-h-screen bg-[#F4EEE1] flex flex-col justify-between items-center px-3 py-3 sm:px-6 sm:py-6 max-w-md mx-auto overflow-y-auto safe-padding-top safe-padding-bottom">
@@ -640,6 +562,31 @@ export default function InstantCamera({
           )}
         </div>
       </div>
+
+      {/* Venue Network Sync Status Indicator */}
+      {queueStatus.pendingCount > 0 && (
+        <div className="w-full my-2 bg-[#1C1A18] border border-[#B89758]/50 px-3 py-1.5 flex items-center justify-between text-[9px] font-mono uppercase tracking-widest text-[#FAF7F0] shadow-sm animate-[fadeIn_0.2s_ease-out]">
+          <div className="flex items-center space-x-2">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                queueStatus.isUploading
+                  ? "bg-amber-400 animate-ping"
+                  : queueStatus.isOffline
+                  ? "bg-red-400"
+                  : "bg-[#B89758]"
+              }`}
+            />
+            <span>
+              {queueStatus.isUploading
+                ? `Transmitting plate (${queueStatus.pendingCount} in buffer)...`
+                : queueStatus.isOffline
+                ? `Signal low • ${queueStatus.pendingCount} plate${queueStatus.pendingCount > 1 ? "s" : ""} saved in buffer`
+                : `Syncing in background: ${queueStatus.pendingCount} plate${queueStatus.pendingCount > 1 ? "s" : ""}`}
+            </span>
+          </div>
+          <span className="text-[#B89758] font-bold">Auto-Sync</span>
+        </div>
+      )}
 
       {/* ── CLASSIC POLAROID ONESTEP CAMERA HOUSING ── */}
       <div className="w-full my-auto flex flex-col items-center">
@@ -936,18 +883,11 @@ export default function InstantCamera({
                 placeholder="Add a handwritten message..."
                 value={caption}
                 onChange={(e) => setCaption(e.target.value)}
-                disabled={isBusy}
                 className="w-full text-center font-hand text-base sm:text-lg text-[#1E1C1A] placeholder:text-[#8A847C]/70 border-b border-[#1E1C1A]/20 bg-transparent py-1 focus:border-[#6B2A2A] outline-none"
               />
-
-              {uploadState !== "idle" && (
-                <div className="pt-1.5 text-center font-mono text-[9px] uppercase tracking-wider text-[#6B2A2A]">
-                  {uploadState === "saving" && "Sealing plate into gala vault..."}
-                  {uploadState === "retrying" && `Signal retry (${uploadAttempt}/4)...`}
-                  {uploadState === "success" && "✓ Sealed in vault"}
-                  {uploadState === "failed" && "! Signal pending"}
-                </div>
-              )}
+              <p className="pt-1.5 font-mono text-[8px] uppercase tracking-wider text-[#5E5A54] text-center">
+                Tapping &apos;Put in Vault&apos; stores plate instantly
+              </p>
             </div>
           </div>
 
@@ -956,7 +896,6 @@ export default function InstantCamera({
             <button
               type="button"
               onClick={handleRetake}
-              disabled={isBusy}
               className="flex-1 py-3 px-3 bg-[#FAF7F0]/15 hover:bg-[#FAF7F0]/25 text-[#FAF7F0] border border-[#FAF7F0]/40 font-mono text-[10px] uppercase tracking-widest cursor-pointer transition-colors text-center"
             >
               Retake Shot
@@ -964,10 +903,9 @@ export default function InstantCamera({
             <button
               type="button"
               onClick={handleConfirmPhoto}
-              disabled={isBusy}
-              className="flex-1 py-3 px-3 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#FAF7F0]/40 font-mono text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-colors text-center shadow-lg"
+              className="flex-1 py-3 px-3 bg-[#6B2A2A] hover:bg-[#853434] text-[#FAF7F0] border border-[#FAF7F0]/40 font-mono text-[10px] uppercase tracking-widest font-bold cursor-pointer transition-colors text-center shadow-lg active:scale-95"
             >
-              {uploadState === "saving" ? "Sealing..." : `Put in Vault (${guest.shots_remaining})`}
+              Put in Vault ({guest.shots_remaining})
             </button>
           </div>
         </div>

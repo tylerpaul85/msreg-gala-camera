@@ -237,6 +237,8 @@ export default function GalleryPage() {
                       <img
                         src={displayUrl}
                         alt={photo.caption || "Gala instant photograph"}
+                        loading="lazy"
+                        decoding="async"
                         className={`w-full h-full object-cover transition-all duration-1000 ${
                           !revealed
                             ? "blur-md scale-105"
