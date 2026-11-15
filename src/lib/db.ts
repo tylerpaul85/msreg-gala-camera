@@ -50,7 +50,7 @@ if (!globalDevStore.__devPhotos) {
 }
 if (!globalDevStore.__devSettings) {
   globalDevStore.__devSettings = {
-    revealed: false,
+    revealed: true,
     updated_at: new Date().toISOString(),
   };
 }
@@ -80,7 +80,8 @@ export async function generateBlurredPreview(imageBuffer: Buffer): Promise<Buffe
 }
 
 /**
- * Check whether photos have been developed/revealed by the admin
+ * Check whether photos have been developed/revealed.
+ * Event has concluded — all gala exposures are developed and released to guests.
  */
 export async function isRevealed(): Promise<boolean> {
   if (isSupabaseConfigured && supabaseAdmin) {
@@ -90,11 +91,12 @@ export async function isRevealed(): Promise<boolean> {
       .eq("id", "settings")
       .maybeSingle();
 
-    if (!error && data) {
-      return Boolean(data.revealed);
+    if (!error && data && data.revealed === false) {
+      return false;
     }
+    return true;
   }
-  return Boolean(globalDevStore.__devSettings?.revealed);
+  return true;
 }
 
 /**

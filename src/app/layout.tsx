@@ -26,25 +26,25 @@ const homemadeApple = Homemade_Apple({
 });
 
 export const metadata: Metadata = {
-  title: "MSREG Gala Camera — Client Appreciation Gala",
-  description: "Eight exposures. Develop at 8:00 PM CST on November 14, 2026. A 1970s instant camera experience for the MSREG Client Appreciation Gala.",
+  title: "MSREG Gala Vault — Developed Client Appreciation Photographs",
+  description: "All 1970s instant exposures from the MSREG Client Appreciation Gala have been developed and released into the collective vault.",
   metadataBase: new URL("https://gala.mattsmithrealestategroup.com"),
   openGraph: {
-    title: "MSREG Gala Camera — Client Appreciation Gala",
-    description: "Eight exposures. Develop at 8:00 PM CST on November 14, 2026. A 1970s instant camera experience for our esteemed guests.",
-    siteName: "MSREG Gala Camera",
+    title: "MSREG Gala Vault — Developed Client Appreciation Photographs",
+    description: "All 1970s instant exposures from the MSREG Client Appreciation Gala have been developed and released into the collective vault.",
+    siteName: "MSREG Gala Vault",
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "MSREG Gala Camera — Client Appreciation Gala",
-    description: "Eight exposures. Develop at 8:00 PM CST on November 14, 2026. A 1970s instant camera experience for our esteemed guests.",
+    title: "MSREG Gala Vault — Developed Client Appreciation Photographs",
+    description: "All 1970s instant exposures from the MSREG Client Appreciation Gala have been developed and released into the collective vault.",
   },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "MSREG Camera",
+    title: "MSREG Vault",
   },
 };
 

@@ -295,11 +295,11 @@ export default function AdminPage() {
 
           <div className="flex items-center space-x-4">
             <Link
-              href="/gallery"
+              href="/"
               target="_blank"
               className="hover:text-[#6B2A2A] transition-colors"
             >
-              Live Gallery ↗
+              Developed Vault ↗
             </Link>
             <button
               type="button"

@@ -259,3 +259,4 @@ function initQueueService() {
 if (typeof window !== "undefined") {
   initQueueService();
 }
+

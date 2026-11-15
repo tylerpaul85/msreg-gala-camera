@@ -1,362 +1,325 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import InstantCamera from "@/components/InstantCamera";
-import { playWindingSound } from "@/lib/audio";
+import { useEffect, useState, useMemo } from "react";
+import Link from "next/link";
 
-interface Guest {
+interface GalleryPhoto {
   id: string;
-  name: string;
-  email: string;
-  shots_remaining: number;
-  session_token?: string;
+  guest_id: string;
+  preview_url: string;
+  original_url?: string;
+  caption: string | null;
+  exposure_number: number;
+  created_at: string;
+  guest_name?: string;
+  guest_first_name?: string;
 }
 
 export default function Home() {
-  const [guest, setGuest] = useState<Guest | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true);
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activePhoto, setActivePhoto] = useState<GalleryPhoto | null>(null);
+  const [isSafelightMode, setIsSafelightMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  // Form states
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [statusNotice, setStatusNotice] = useState<string | null>(null);
-
-  // Check existing session token on load with localStorage fallback
-  useEffect(() => {
-    async function checkSession() {
-      try {
-        const localToken =
-          typeof window !== "undefined"
-            ? localStorage.getItem("msreg_gala_session_token")
-            : null;
-        const headers: Record<string, string> = {};
-        if (localToken) {
-          headers["x-session-token"] = localToken;
-        }
-
-        const res = await fetch("/api/auth/session", { headers });
-        const data = await res.json();
-        if (data.authenticated && data.guest) {
-          setGuest(data.guest);
-          if (data.guest.session_token) {
-            localStorage.setItem(
-              "msreg_gala_session_token",
-              data.guest.session_token
-            );
-          }
-        }
-      } catch (err) {
-        console.warn("Session check bypassed:", err);
-      } finally {
-        setCheckingSession(false);
-      }
-    }
-    checkSession();
-  }, []);
-
-  const handleLogout = async () => {
+  const fetchGallery = async () => {
     try {
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("msreg_gala_session_token");
-      }
-      await fetch("/api/auth/logout", { method: "POST" });
-    } catch (e) {
-      // Ignored
-    }
-    setGuest(null);
-    setStatusNotice(null);
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormError(null);
-    setStatusNotice(null);
-
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      setFormError(
-        "Invalid electronic mail address. A valid address is required to deliver your developed gallery at 8:00 PM CST."
-      );
-      return;
-    }
-
-    if (!firstName.trim() || !lastName.trim()) {
-      setFormError("Kindly provide both your given name and surname for the gala roll ledger.");
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ firstName, lastName, email }),
-      });
-
+      const res = await fetch("/api/gallery", { cache: "no-store" });
       const data = await res.json();
 
-      if (!res.ok) {
-        throw new Error(data.error || "The registrar desk could not validate your cartridge.");
+      if (data && Array.isArray(data.photos)) {
+        setPhotos(data.photos);
       }
-
-      // Play mechanical film winding sound
-      playWindingSound(false);
-
-      if (!data.isNew) {
-        setStatusNotice(
-          `Welcome back, ${data.guest.name}. Existing film roll restored (${data.guest.shots_remaining} exposures remaining).`
-        );
-      } else {
-        setStatusNotice(`Film cartridge loaded: 8 exposures initialized for ${data.guest.name}.`);
-      }
-
-      if (data.guest?.session_token && typeof window !== "undefined") {
-        localStorage.setItem(
-          "msreg_gala_session_token",
-          data.guest.session_token
-        );
-      }
-
-      // Brief mechanical transition delay so the guest hears the ratchet
-      setTimeout(() => {
-        setGuest(data.guest);
-      }, 550);
-    } catch (err: any) {
-      setFormError(err.message || "An unexpected ledger error occurred. Please try again.");
-      setIsSubmitting(false);
+    } catch (err) {
+      console.warn("Gallery sync skipped:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (checkingSession) {
-    return (
-      <main className="min-h-screen flex items-center justify-center p-4">
-        <div className="text-center space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.25em] text-[#5E5A54] animate-pulse">
-            Checking Film Registry...
-          </p>
-        </div>
-      </main>
-    );
-  }
+  useEffect(() => {
+    fetchGallery();
+    const interval = setInterval(fetchGallery, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
-  // Active camera view if guest is registered/logged in
-  if (guest) {
-    return <InstantCamera guest={guest} onLogout={handleLogout} />;
-  }
+  // Filtered photos based on guest search
+  const filteredPhotos = useMemo(() => {
+    if (!searchQuery.trim()) return photos;
+    const query = searchQuery.toLowerCase().trim();
+    return photos.filter((p) => {
+      const name = (p.guest_name || "").toLowerCase();
+      const caption = (p.caption || "").toLowerCase();
+      return name.includes(query) || caption.includes(query);
+    });
+  }, [photos, searchQuery]);
 
-  // Otherwise, render vintage letterpress landing page
+  const handleDownload = (photo: GalleryPhoto) => {
+    const url = photo.original_url || photo.preview_url;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `MSREG_Gala_${photo.guest_first_name || "Photo"}_Exp${photo.exposure_number}.jpg`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
-    <main className="relative min-h-screen flex flex-col justify-between px-4 py-8 sm:px-8 sm:py-12 md:py-16 max-w-2xl mx-auto safe-padding-top safe-padding-bottom">
-      {/* Outer printed program border frame */}
-      <div className="absolute inset-3 sm:inset-5 pointer-events-none border border-[#1E1C1A]/15" />
-      <div className="absolute inset-4 sm:inset-6 pointer-events-none border border-[#1E1C1A]/30" />
-
-      {/* Top Program Header */}
-      <header className="relative z-10 pt-4 sm:pt-6 text-center">
-        <div className="flex items-center justify-between text-[10px] sm:text-xs font-mono uppercase tracking-[0.25em] text-[#5E5A54] pb-3 border-b border-[#1E1C1A]/20">
-          <span>Edition No. 1974</span>
-          <span className="font-semibold text-[#6B2A2A]">MSREG Client Gala</span>
-          <span>Film Cartridge: 8 Exp.</span>
-        </div>
-
-        <div className="pt-8 sm:pt-10 space-y-2">
-          <p className="font-mono text-xs uppercase tracking-[0.3em] text-[#5E5A54]">
-            Annual Client Appreciation
-          </p>
-          <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-light tracking-tight text-[#1E1C1A] leading-[1.05]">
-            MSREG Gala Camera
-          </h1>
-          <p className="font-serif italic text-lg sm:text-xl text-[#6B2A2A] pt-1">
-            Saturday, November 14, 2026
-          </p>
-        </div>
-
-        {/* Delicate divider rule */}
-        <div className="my-6 flex items-center justify-center space-x-3">
-          <span className="h-[1px] w-12 sm:w-20 bg-[#1E1C1A]/25" />
-          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#5E5A54]">
-            Eight exposures. Releases at 8:00 PM CST.
-          </span>
-          <span className="h-[1px] w-12 sm:w-20 bg-[#1E1C1A]/25" />
-        </div>
-      </header>
-
-      {/* Main Content: Polaroid Display + Guest Registry Form */}
-      <section className="relative z-10 my-4 sm:my-6 space-y-8">
-        {/* Authentic Polaroid Frame */}
-        <div className="flex justify-center">
-          <div className="polaroid-frame w-64 sm:w-72 border border-[#1E1C1A]/25 transition-transform hover:rotate-[0.5deg] duration-300">
-            {/* The square photo aperture */}
-            <div className="aspect-square bg-[#22201D] relative overflow-hidden flex flex-col items-center justify-center text-center p-4 border border-[#1E1C1A]/40">
-              <div className="w-24 h-24 rounded-full border border-[#FAF7F0]/15 flex items-center justify-center mb-3">
-                <div className="w-16 h-16 rounded-full border border-[#FAF7F0]/25 flex items-center justify-center">
-                  <div className="w-8 h-8 rounded-full border border-[#6B2A2A]/60 flex items-center justify-center">
-                    <span className="w-2 h-2 rounded-full bg-[#FAF7F0]/40" />
-                  </div>
-                </div>
-              </div>
-
-              <p className="font-mono text-[9px] uppercase tracking-[0.25em] text-[#FAF7F0]/50">
-                Latent Film Chamber
-              </p>
-              <p className="font-serif italic text-sm text-[#FAF7F0]/85 mt-1">
-                Awaiting your first exposure
-              </p>
-              <div className="absolute bottom-2 right-2 font-mono text-[8px] text-[#FAF7F0]/30 tracking-widest">
-                8 OF 8 REMAINING
-              </div>
-            </div>
-
-            {/* Handwritten caption in thick bottom border */}
-            <div className="pt-4 pb-1 text-center">
-              <p className="font-hand text-base sm:text-lg text-[#1E1C1A]/85 tracking-normal">
-                MSREG Gala • Nov 14, 2026
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Guest Registration Form with Perforated Ticket Edge */}
-        <div className="relative border border-[#1E1C1A]/25 bg-[#F4EEE1]/80 p-5 sm:p-7">
-          {/* Perforated Admit Ticket Header */}
-          <div className="ticket-perforation -mt-5 -mx-5 sm:-mx-7 mb-4 opacity-40" />
-
-          <div className="flex items-center justify-between pb-3 mb-5 border-b border-[#1E1C1A]/15">
-            <div>
-              <span className="block font-mono text-[8px] uppercase tracking-[0.25em] text-[#6B2A2A]">
-                ADMIT ONE • CARTRIDGE ISSUE
-              </span>
-              <h2 className="font-mono text-xs uppercase tracking-[0.2em] text-[#1E1C1A] font-bold mt-0.5">
-                Guest Registry Ledger
-              </h2>
-            </div>
-            <span className="font-mono text-[10px] uppercase tracking-[0.15em] text-[#6B2A2A]">
-              Step 01 of 02
+    <main
+      className={`relative min-h-screen px-4 py-8 sm:px-8 sm:py-12 transition-colors duration-500 safe-padding-top safe-padding-bottom ${
+        isSafelightMode ? "safelight-theme" : "bg-[#F4EEE1] text-[#1E1C1A]"
+      }`}
+    >
+      <div className="max-w-6xl mx-auto">
+        {/* Top Header / Archival Program Navigation */}
+        <header className="relative z-10 pb-6 border-b border-vintage">
+          <div className="flex items-center justify-between font-mono text-[10px] sm:text-xs uppercase tracking-[0.25em] text-[#5E5A54] pb-4">
+            <span className="font-semibold text-[#6B2A2A]">
+              MSREG Client Gala • Archival Ledger
             </span>
+
+            <div className="flex items-center space-x-3">
+              {/* Safe-Light Mode Toggle */}
+              <button
+                type="button"
+                onClick={() => setIsSafelightMode(!isSafelightMode)}
+                className={`px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.2em] border transition-colors cursor-pointer flex items-center space-x-1.5 ${
+                  isSafelightMode
+                    ? "bg-[#6B2A2A] text-[#FAF7F0] border-[#E65A5A]"
+                    : "bg-[#FAF7F0] text-[#1E1C1A] border-[#1E1C1A]/20 hover:border-[#6B2A2A]"
+                }`}
+                title="Toggle 1970s Darkroom Safe-Light Ambience"
+              >
+                <span>💡</span>
+                <span>{isSafelightMode ? "Safelight: On" : "Safelight"}</span>
+              </button>
+
+              <span className="font-semibold text-[#6B2A2A]">Vault</span>
+              <span>{photos.length} Plates</span>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="firstName"
-                  className="block font-mono text-[10px] uppercase tracking-[0.18em] text-[#5E5A54]"
-                >
-                  Given Name <span className="text-[#6B2A2A]">*</span>
-                </label>
-                <input
-                  id="firstName"
-                  type="text"
-                  required
-                  placeholder="Given Name"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="w-full px-3 py-2.5 text-base sm:text-sm placeholder:text-[#8A847C]/70 focus:ring-0"
-                />
-              </div>
+          <div className="text-center pt-4 sm:pt-6 space-y-3">
+            <p className="font-mono text-xs uppercase tracking-[0.3em] text-[#5E5A54]">
+              Saturday, November 14, 2026 • Annual Client Appreciation
+            </p>
+            <h1 className="text-4xl sm:text-5xl md:text-6xl font-serif font-light tracking-tight">
+              MSREG Gala Vault
+            </h1>
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="lastName"
-                  className="block font-mono text-[10px] uppercase tracking-[0.18em] text-[#5E5A54]"
-                >
-                  Surname <span className="text-[#6B2A2A]">*</span>
-                </label>
-                <input
-                  id="lastName"
-                  type="text"
-                  required
-                  placeholder="Surname"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-3 py-2.5 text-base sm:text-sm placeholder:text-[#8A847C]/70 focus:ring-0"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <label
-                htmlFor="email"
-                className="block font-mono text-[10px] uppercase tracking-[0.18em] text-[#5E5A54]"
-              >
-                Email Address <span className="text-[#6B2A2A]">*</span>
-              </label>
-              <input
-                id="email"
-                type="email"
-                required
-                placeholder="guest@domain.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-3 py-2.5 text-base sm:text-sm placeholder:text-[#8A847C]/70 focus:ring-0"
-              />
-            </div>
-
-            <div className="pt-2 text-[11px] font-mono text-[#5E5A54] leading-relaxed flex items-start space-x-2">
-              <span className="text-[#6B2A2A] font-bold">¶</span>
-              <span>
-                Each guest receives 8 analog exposures. Returning guests are
-                re-connected to their active cartridge. All photographs remain
-                latent in the collective gallery until 8:00 PM CST.
-              </span>
-            </div>
-
-            {/* Vintage error presentation */}
-            {formError && (
-              <div className="p-3 bg-[#FAF7F0] border-l-2 border-[#6B2A2A] border-t border-r border-b border-[#1E1C1A]/20 text-[#6B2A2A] font-mono text-[11px] leading-relaxed">
-                <span className="font-bold uppercase tracking-wider block mb-0.5">
-                  Registry Notice:
+            {/* Event Concluded & All Photos Developed Banner */}
+            <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3">
+              <div className="inline-flex items-center space-x-2 px-4 py-1.5 bg-[#FAF7F0] border-2 border-[#6B2A2A] text-[#6B2A2A]">
+                <span className="w-2 h-2 rounded-full bg-emerald-600 shadow-[0_0_6px_#10b981]" />
+                <span className="font-mono text-xs uppercase tracking-[0.22em] font-bold">
+                  Event Concluded • All Exposures Developed
                 </span>
-                {formError}
               </div>
-            )}
+            </div>
 
-            {/* Status notice */}
-            {statusNotice && (
-              <div className="p-3 bg-[#FAF7F0] border border-[#1E1C1A]/25 text-[#1E1C1A] font-mono text-[11px] tracking-wide text-center">
-                {statusNotice}
-              </div>
-            )}
+            <p className="font-serif italic text-base sm:text-lg text-[#5E5A54] max-w-lg mx-auto pt-2">
+              The camera rolls have concluded and all 1970s instant exposures
+              have been sealed and developed from the darkroom vault.
+            </p>
+          </div>
 
-            {/* Load Film Button */}
-            <div className="pt-3">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="w-full cursor-pointer py-3.5 px-6 bg-[#1E1C1A] text-[#F4EEE1] hover:bg-[#6B2A2A] active:bg-[#4A1A1A] transition-colors border border-[#1E1C1A] font-mono text-xs uppercase tracking-[0.25em] font-medium text-center focus:outline-none"
-              >
-                {isSubmitting ? (
-                  <span className="flex items-center justify-center space-x-2">
-                    <span className="inline-block w-2 h-2 bg-[#F4EEE1] animate-ping" />
-                    <span>Winding Film Sprockets...</span>
-                  </span>
-                ) : (
-                  <span>Load Film &nbsp;[ 8 Exposures ]</span>
+          {/* Search / Filter Toolbar */}
+          {photos.length > 0 && (
+            <div className="mt-8 max-w-md mx-auto">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Filter by guest name or handwritten caption..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-[#FAF7F0] border border-[#1E1C1A]/25 text-sm font-serif placeholder:font-mono placeholder:text-xs placeholder:tracking-wider focus:border-[#6B2A2A] outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-mono text-[#5E5A54] hover:text-[#1E1C1A]"
+                  >
+                    ✕ Clear
+                  </button>
                 )}
+              </div>
+              {searchQuery && (
+                <p className="text-center font-mono text-[10px] uppercase tracking-wider text-[#5E5A54] mt-2">
+                  Showing {filteredPhotos.length} of {photos.length} developed plates
+                </p>
+              )}
+            </div>
+          )}
+        </header>
+
+        {/* Gallery Content */}
+        <section className="relative z-10 my-8 sm:my-12">
+          {loading ? (
+            <div className="py-24 text-center font-mono text-xs uppercase tracking-[0.25em] text-[#5E5A54] animate-pulse">
+              Unsealing Chemical Vault...
+            </div>
+          ) : photos.length === 0 ? (
+            <div className="py-24 text-center space-y-3 border border-vintage bg-[#FAF7F0]/40 p-8 max-w-lg mx-auto">
+              <p className="font-serif italic text-xl text-[#5E5A54]">
+                The gala darkroom is finalizing chemical development.
+              </p>
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-[#8A847C]">
+                Check back shortly as photographs are archived into the collective vault.
+              </p>
+            </div>
+          ) : filteredPhotos.length === 0 ? (
+            <div className="py-16 text-center space-y-2 border border-vintage bg-[#FAF7F0]/40 p-6 max-w-md mx-auto">
+              <p className="font-serif italic text-base text-[#5E5A54]">
+                No exposures found matching &ldquo;{searchQuery}&rdquo;.
+              </p>
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="font-mono text-xs uppercase tracking-wider text-[#6B2A2A] underline cursor-pointer"
+              >
+                View all {photos.length} plates
               </button>
             </div>
-          </form>
-        </div>
-      </section>
+          ) : (
+            /* Masonry Grid of Developed Polaroids */
+            <div className="columns-1 sm:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6">
+              {filteredPhotos.map((photo) => {
+                const displayUrl = photo.original_url || photo.preview_url;
 
-      {/* Program Colophon / Footer */}
-      <footer className="relative z-10 pt-6 pb-2 text-center border-t border-[#1E1C1A]/15 space-y-2">
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#5E5A54]">
-          <span>MSREG Private Event</span>
-          <span>•</span>
-          <span>Instant Emulsion Process</span>
-          <span>•</span>
-          <span>Archival Edition</span>
-        </div>
-        <p className="font-serif italic text-xs text-[#5E5A54]/80">
-          Designed for handheld capture during the evening of November 14, 2026.
-        </p>
-      </footer>
+                return (
+                  <div
+                    key={photo.id}
+                    onClick={() => setActivePhoto(photo)}
+                    className="break-inside-avoid cursor-pointer polaroid-frame transition-all duration-300 hover:-translate-y-1 hover:border-[#1E1C1A]/50 group"
+                  >
+                    {/* Photo frame */}
+                    <div className="aspect-square relative overflow-hidden bg-[#201E1C] border border-[#1E1C1A]/20">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={displayUrl}
+                        alt={photo.caption || "Gala instant photograph"}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.02]"
+                      />
+
+                      {/* Exposure index badge */}
+                      <div className="absolute top-2 right-2 font-mono text-[8px] uppercase tracking-widest text-[#FAF7F0]/80 bg-[#1E1C1A]/75 px-1.5 py-0.5 border border-[#FAF7F0]/20">
+                        Exp. {photo.exposure_number}
+                      </div>
+                    </div>
+
+                    {/* Handwritten caption chin in Homemade Apple font */}
+                    <div className="pt-3 pb-1 text-center space-y-1">
+                      {photo.caption ? (
+                        <p className="font-hand text-base sm:text-lg text-[#1E1C1A] leading-tight line-clamp-2">
+                          &ldquo;{photo.caption}&rdquo;
+                        </p>
+                      ) : (
+                        <p className="font-serif italic text-sm text-[#8A847C]">
+                          MSREG Gala • Nov 14
+                        </p>
+                      )}
+
+                      <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#5E5A54] pt-0.5">
+                        {photo.guest_name || "Guest"}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        {/* Full-Screen Inspection Modal */}
+        {activePhoto && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#1E1C1A]/85 backdrop-blur-xs animate-[fadeIn_0.2s_ease-out]"
+            onClick={() => setActivePhoto(null)}
+          >
+            <div
+              className="polaroid-frame max-w-lg w-full border border-[#1E1C1A] shadow-2xl relative"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={() => setActivePhoto(null)}
+                className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center font-mono text-xs uppercase bg-[#1E1C1A] text-[#FAF7F0] hover:bg-[#6B2A2A] transition-colors cursor-pointer border border-[#FAF7F0]/20 z-10"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+
+              {/* Photo Area */}
+              <div className="aspect-square relative overflow-hidden bg-[#1E1C1A] border border-[#1E1C1A]/30">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={activePhoto.original_url || activePhoto.preview_url}
+                  alt={activePhoto.caption || "Full resolution photograph"}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              {/* Details & Handwritten Caption Chin */}
+              <div className="pt-4 pb-2 text-center space-y-3">
+                {activePhoto.caption && (
+                  <p className="font-hand text-xl sm:text-2xl text-[#1E1C1A] px-2 leading-relaxed">
+                    &ldquo;{activePhoto.caption}&rdquo;
+                  </p>
+                )}
+
+                <div className="space-y-1 font-mono text-[10px] uppercase tracking-[0.22em] text-[#5E5A54]">
+                  <p className="font-bold text-[#1E1C1A]">
+                    Photographer: {activePhoto.guest_name || "Guest"}
+                  </p>
+                  <p>
+                    Exposure No. {activePhoto.exposure_number} • Sealed into Vault
+                  </p>
+                </div>
+
+                {/* Download Button */}
+                <div className="pt-2 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(activePhoto)}
+                    className="py-2.5 px-6 bg-[#1E1C1A] hover:bg-[#6B2A2A] text-[#FAF7F0] border border-[#1E1C1A] font-mono text-[11px] uppercase tracking-[0.25em] transition-colors cursor-pointer flex items-center space-x-2"
+                  >
+                    <span>↓</span>
+                    <span>Download Photograph</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Archival Program Footer */}
+        <footer className="relative z-10 pt-8 pb-4 text-center border-t border-vintage space-y-3">
+          <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] uppercase tracking-[0.2em] text-[#5E5A54]">
+            <span>MSREG Gala 2026</span>
+            <span>•</span>
+            <span>Client Appreciation Edition</span>
+            <span>•</span>
+            <span>Archival Photographic Ledger</span>
+          </div>
+
+          <p className="font-serif italic text-xs text-[#5E5A54]/80">
+            All instant photographs preserved and developed courtesy of Matt Smith Real Estate Group.
+          </p>
+
+          <div className="pt-2">
+            <Link
+              href="/admin"
+              className="font-mono text-[9px] uppercase tracking-[0.2em] text-[#8A847C] hover:text-[#6B2A2A] transition-colors"
+            >
+              Archival Admin Desk →
+            </Link>
+          </div>
+        </footer>
+      </div>
     </main>
   );
 }
